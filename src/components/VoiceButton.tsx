@@ -81,7 +81,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
             errorMessage = 'No microphone was found. Please ensure a microphone is connected.';
             break;
           case 'network':
-            errorMessage = 'Network error occurred. Please check your connection.';
+            errorMessage = 'Network error occurred. Please check your connection and try again.';
             shouldRetry = true;
             break;
           case 'not-allowed':
@@ -102,11 +102,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         if (shouldRetry && retryCountRef.current < maxRetries) {
           retryCountRef.current++;
           console.log(`Retrying speech recognition (attempt ${retryCountRef.current}/${maxRetries})`);
+          // Add delay between retries
           setTimeout(() => {
             if (isMountedRef.current) {
               startListening();
             }
-          }, 1000); // Wait 1 second before retrying
+          }, 2000); // Wait 2 seconds before retrying
         }
       };
 
@@ -168,13 +169,22 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       return;
     }
 
-    initializeSpeechRecognition();
+    // Add delay before initialization to prevent race conditions
+    setTimeout(() => {
+      if (isMountedRef.current) {
+        initializeSpeechRecognition();
+      }
+    }, 500);
 
     return () => {
       isMountedRef.current = false;
       if (recognitionRef.current) {
         console.log('Cleaning up speech recognition');
-        recognitionRef.current.abort();
+        try {
+          recognitionRef.current.abort();
+        } catch (err) {
+          console.error('Error during cleanup:', err);
+        }
         recognitionRef.current = null;
       }
       if (noSpeechTimeoutRef.current) {
