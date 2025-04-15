@@ -13,6 +13,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const startSoundRef = useRef<HTMLAudioElement | null>(null);
   const endSoundRef = useRef<HTMLAudioElement | null>(null);
   const initializedRef = useRef(false);
+  const isStartingRef = useRef(false);
 
   useEffect(() => {
     // Prevent multiple initializations
@@ -138,6 +139,11 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   };
 
   const startListening = () => {
+    if (isStartingRef.current) {
+      console.log('Already starting speech recognition');
+      return;
+    }
+
     console.log('Starting listening...');
     setError(null);
     setTranscript('');
@@ -158,16 +164,19 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         
         try {
           console.log('Starting speech recognition...');
+          isStartingRef.current = true;
           recognitionRef.current.start();
         } catch (err) {
           console.error('Error starting speech recognition:', err);
           setError('Failed to start speech recognition. Please try again.');
           setIsListening(false);
+          isStartingRef.current = false;
         }
       })
       .catch(err => {
         console.error('Error checking microphone permissions:', err);
         setError('Unable to check microphone permissions. Please try again.');
+        isStartingRef.current = false;
       });
   };
 
@@ -178,6 +187,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         playSound(endSoundRef.current);
         recognitionRef.current.stop();
         setIsListening(false);
+        isStartingRef.current = false;
       } catch (err) {
         console.error('Error stopping speech recognition:', err);
       }
