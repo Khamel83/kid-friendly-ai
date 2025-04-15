@@ -123,10 +123,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       
       console.log('VoiceButton initialization complete');
       setIsInitializing(false);
+      return true;
     } catch (err) {
       console.error('Error initializing speech recognition:', err);
       setError('Failed to initialize speech recognition. Please try again.');
       setIsInitializing(false);
+      return false;
     }
   };
 
@@ -192,10 +194,15 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     setError(null);
     setTranscript('');
     
+    // Reinitialize if needed
     if (!recognitionRef.current) {
-      console.error('Speech recognition not initialized');
-      setError('Speech recognition is not available. Please refresh the page.');
-      return;
+      console.log('Reinitializing speech recognition...');
+      const success = initializeSpeechRecognition();
+      if (!success) {
+        console.error('Failed to reinitialize speech recognition');
+        setError('Speech recognition is not available. Please refresh the page.');
+        return;
+      }
     }
 
     // Check microphone permissions
