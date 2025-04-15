@@ -33,8 +33,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      // Use WebM format which is widely supported
-      const mimeType = 'audio/webm;codecs=opus';
+      // Use WAV format which is widely supported
+      const mimeType = 'audio/wav';
       
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         throw new Error('Audio recording is not supported in this browser');
@@ -108,7 +108,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       });
 
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
+      formData.append('file', audioBlob, 'audio.wav');
       formData.append('model', 'whisper-1');
 
       const response = await fetch('/api/transcribe', {

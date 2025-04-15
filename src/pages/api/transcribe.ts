@@ -69,7 +69,7 @@ export default async function handler(
 
     // Create a temporary file with the correct content type
     const file = new File([audioData], filename, { 
-      type: 'audio/webm' // Force WebM type
+      type: 'audio/wav' // Force WAV type
     });
 
     console.log('Created File object:', {
