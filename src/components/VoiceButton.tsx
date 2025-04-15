@@ -14,7 +14,26 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const endSoundRef = useRef<HTMLAudioElement | null>(null);
   const initializedRef = useRef(false);
   const isStartingRef = useRef(false);
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Initialize audio files
+  useEffect(() => {
+    try {
+      console.log('Initializing audio files...');
+      startSoundRef.current = new Audio('/sounds/start.mp3');
+      endSoundRef.current = new Audio('/sounds/end.mp3');
+      
+      // Preload the audio files
+      startSoundRef.current.load();
+      endSoundRef.current.load();
+      
+      console.log('Audio files initialized successfully');
+    } catch (err) {
+      console.warn('Failed to initialize audio files:', err);
+    }
+  }, []);
+
+  // Initialize speech recognition
   useEffect(() => {
     // Prevent multiple initializations
     if (initializedRef.current) return;
@@ -59,6 +78,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         console.log('Speech recognition started');
         setIsListening(true);
         setError(null);
+        isStartingRef.current = false;
         playSound(startSoundRef.current);
       };
 
@@ -74,6 +94,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
       recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error:', event);
+        isStartingRef.current = false;
+        
         let errorMessage = 'I couldn\'t hear that. Can you try again?';
         
         switch (event.error) {
@@ -106,16 +128,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       recognitionRef.current.onend = () => {
         console.log('Speech recognition ended');
         setIsListening(false);
+        isStartingRef.current = false;
       };
-
-      // Initialize sound effects
-      try {
-        startSoundRef.current = new Audio('/sounds/start.mp3');
-        endSoundRef.current = new Audio('/sounds/end.mp3');
-        console.log('Sound effects initialized successfully');
-      } catch (err) {
-        console.warn('Failed to initialize sound effects:', err);
-      }
       
       console.log('VoiceButton initialization complete');
     } catch (err) {
@@ -124,6 +138,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     }
 
     return () => {
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+      }
       if (recognitionRef.current) {
         console.log('Cleaning up speech recognition');
         recognitionRef.current.abort();
@@ -133,8 +150,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   const playSound = (sound: HTMLAudioElement | null) => {
     if (sound) {
-      sound.currentTime = 0; // Reset the sound to the beginning
-      sound.play().catch(err => console.warn('Failed to play sound:', err));
+      try {
+        sound.currentTime = 0; // Reset the sound to the beginning
+        sound.play().catch(err => console.warn('Failed to play sound:', err));
+      } catch (err) {
+        console.warn('Error playing sound:', err);
+      }
     }
   };
 
