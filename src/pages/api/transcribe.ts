@@ -37,6 +37,7 @@ export default async function handler(
     const parts = buffer.toString().split(`--${boundary}`);
     let audioData: Buffer | null = null;
     let filename = '';
+    let contentType = '';
 
     for (const part of parts) {
       if (part.includes('Content-Disposition: form-data')) {
@@ -46,6 +47,12 @@ export default async function handler(
           const dataStart = part.indexOf('\r\n\r\n') + 4;
           const dataEnd = part.lastIndexOf('\r\n');
           audioData = Buffer.from(part.slice(dataStart, dataEnd));
+          
+          // Extract content type if available
+          const contentTypeMatch = part.match(/Content-Type: ([^\r\n]+)/);
+          if (contentTypeMatch) {
+            contentType = contentTypeMatch[1];
+          }
         }
       }
     }
@@ -54,8 +61,8 @@ export default async function handler(
       throw new Error('No audio data found in request');
     }
 
-    // Create a temporary file
-    const file = new File([audioData], filename, { type: 'audio/wav' });
+    // Create a temporary file with the correct content type
+    const file = new File([audioData], filename, { type: contentType || 'audio/mp3' });
 
     // Send to OpenAI
     const response = await openai.audio.transcriptions.create({

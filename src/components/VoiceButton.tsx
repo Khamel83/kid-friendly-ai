@@ -29,8 +29,29 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
+      // Try different MIME types in order of preference
+      const mimeTypes = [
+        'audio/mp3',
+        'audio/mpeg',
+        'audio/webm',
+        'audio/ogg',
+        'audio/wav'
+      ];
+      
+      let selectedMimeType = '';
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          break;
+        }
+      }
+      
+      if (!selectedMimeType) {
+        throw new Error('No supported audio format found');
+      }
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/wav'
+        mimeType: selectedMimeType
       });
       mediaRecorderRef.current = mediaRecorder;
 
@@ -43,7 +64,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       mediaRecorder.onstop = async () => {
         if (!isMountedRef.current) return;
         
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
         await transcribeAudio(audioBlob);
         
         // Clean up
@@ -77,7 +98,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const transcribeAudio = async (audioBlob: Blob) => {
     try {
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.wav');
+      formData.append('file', audioBlob, 'audio.mp3');
       formData.append('model', 'whisper-1');
 
       const response = await fetch('/api/transcribe', {
