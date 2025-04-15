@@ -33,16 +33,16 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      // Force MP3 format as it's widely supported
-      const mimeType = 'audio/mp3';
+      // Use WebM format which is widely supported
+      const mimeType = 'audio/webm;codecs=opus';
       
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        throw new Error('MP3 format is not supported in this browser');
+        throw new Error('Audio recording is not supported in this browser');
       }
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: mimeType,
-        audioBitsPerSecond: 128000 // Set a reasonable bitrate
+        audioBitsPerSecond: 128000
       });
       mediaRecorderRef.current = mediaRecorder;
 
@@ -79,7 +79,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       setIsListening(true);
     } catch (err) {
       console.error('Error starting recording:', err);
-      setError('Failed to start recording. Please check your microphone permissions.');
+      setError('Failed to start recording. Please check your microphone permissions and try using Chrome browser.');
       setIsListening(false);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -108,7 +108,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       });
 
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.mp3');
+      formData.append('file', audioBlob, 'audio.webm');
       formData.append('model', 'whisper-1');
 
       const response = await fetch('/api/transcribe', {
