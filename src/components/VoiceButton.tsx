@@ -14,10 +14,21 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const endSoundRef = useRef<HTMLAudioElement | null>(null);
   const initializedRef = useRef(false);
   const isStartingRef = useRef(false);
-  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Check browser audio capabilities
+  const canPlayAudio = () => {
+    const audio = new Audio();
+    return !!(audio.canPlayType && audio.canPlayType('audio/mpeg'));
+  };
 
   // Initialize audio files
   useEffect(() => {
+    if (!canPlayAudio()) {
+      console.warn('Browser does not support audio playback');
+      return;
+    }
+
     try {
       console.log('Initializing audio files...');
       startSoundRef.current = new Audio('/sounds/start.mp3');
@@ -27,14 +38,38 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       startSoundRef.current.load();
       endSoundRef.current.load();
       
+      // Check if audio files exist
+      startSoundRef.current.addEventListener('error', () => {
+        console.warn('Start sound file not found');
+        startSoundRef.current = null;
+      });
+      
+      endSoundRef.current.addEventListener('error', () => {
+        console.warn('End sound file not found');
+        endSoundRef.current = null;
+      });
+      
       console.log('Audio files initialized successfully');
     } catch (err) {
       console.warn('Failed to initialize audio files:', err);
     }
+
+    return () => {
+      if (startSoundRef.current) {
+        startSoundRef.current.pause();
+        startSoundRef.current = null;
+      }
+      if (endSoundRef.current) {
+        endSoundRef.current.pause();
+        endSoundRef.current = null;
+      }
+    };
   }, []);
 
   // Initialize speech recognition
   useEffect(() => {
+    isMountedRef.current = true;
+
     // Prevent multiple initializations
     if (initializedRef.current) return;
     initializedRef.current = true;
@@ -75,6 +110,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       
       // Set up event handlers
       recognitionRef.current.onstart = () => {
+        if (!isMountedRef.current) return;
         console.log('Speech recognition started');
         setIsListening(true);
         setError(null);
@@ -83,6 +119,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       };
 
       recognitionRef.current.onresult = (event: any) => {
+        if (!isMountedRef.current) return;
         console.log('Speech recognition result:', event);
         const current = event.resultIndex;
         const result = event.results[current][0].transcript;
@@ -93,6 +130,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       };
 
       recognitionRef.current.onerror = (event: any) => {
+        if (!isMountedRef.current) return;
         console.error('Speech recognition error:', event);
         isStartingRef.current = false;
         
@@ -126,6 +164,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       };
 
       recognitionRef.current.onend = () => {
+        if (!isMountedRef.current) return;
         console.log('Speech recognition ended');
         setIsListening(false);
         isStartingRef.current = false;
@@ -138,12 +177,11 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     }
 
     return () => {
-      if (cleanupTimeoutRef.current) {
-        clearTimeout(cleanupTimeoutRef.current);
-      }
+      isMountedRef.current = false;
       if (recognitionRef.current) {
         console.log('Cleaning up speech recognition');
         recognitionRef.current.abort();
+        recognitionRef.current = null;
       }
     };
   }, [onResult, setIsListening]);
@@ -178,6 +216,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     // Check microphone permissions
     navigator.permissions.query({ name: 'microphone' as any })
       .then(permissionStatus => {
+        if (!isMountedRef.current) return;
+        
         if (permissionStatus.state === 'denied') {
           setError('Microphone access was denied. Please allow microphone access in your browser settings.');
           return;
