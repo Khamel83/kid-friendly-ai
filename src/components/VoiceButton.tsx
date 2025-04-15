@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 interface VoiceButtonProps {
   onResult: (text: string) => void;
@@ -15,107 +15,15 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioChunksRef = useRef<Float32Array[]>([]); 
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null); // Ref for source node
+  const isListeningRef = useRef(isListening); // Ref to track listening state reliably in callbacks
 
+  // Keep isListeningRef synced with the isListening prop/state
   useEffect(() => {
-    isMountedRef.current = true;
-    // Ensure cleanup happens on unmount
-    return () => {
-      isMountedRef.current = false;
-      // Call stopRecording to ensure resources are released
-      // Need to pass the current state/refs if needed, or ensure stopRecording uses refs
-      stopRecordingInternal(); 
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
-  const startRecording = async () => {
-    try {
-      setError(null);
-      audioChunksRef.current = []; // Reset chunks
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100, // Ensure consistent sample rate
-          channelCount: 1
-        }
-      });
-      streamRef.current = stream;
-      
-      // Create audio context if it doesn't exist or is closed
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioContext();
-      }
-      const audioContext = audioContextRef.current;
-      sourceNodeRef.current = audioContext.createMediaStreamSource(stream);
-      processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
-
-      const processor = processorRef.current;
-      const source = sourceNodeRef.current;
-      
-      processor.onaudioprocess = (e) => {
-        // Use the ref to access isListening state
-        if (isListening) { 
-          // Make a copy of the data to ensure it's not overwritten
-          audioChunksRef.current.push(new Float32Array(e.inputBuffer.getChannelData(0)));
-        }
-      };
-      
-      source.connect(processor);
-      processor.connect(audioContext.destination); // Connect processor to destination
-      
-      setIsListening(true);
-      
-    } catch (err) {
-      console.error('Error starting recording:', err);
-      setError('Failed to start recording. Check mic permissions & use Chrome.');
-      setIsListening(false);
-      cleanupAudioResources(); // Ensure cleanup on error
-    }
-  };
-
-  // Renamed to avoid conflict with the exported stopRecording
-  const stopRecordingInternal = async () => {
-    if (!isListening && !streamRef.current) return; // Check if already stopped or never started
-    
-    console.log("Stopping recording...");
-    setIsListening(false); // Set state immediately
-
-    cleanupAudioResources();
-
-    // Process accumulated chunks
-    if (audioChunksRef.current.length > 0) {
-      console.log(`Processing ${audioChunksRef.current.length} audio chunks.`);
-      try {
-        const wavBlob = convertToWav(audioChunksRef.current);
-        console.log('Final Audio Blob:', {
-          size: wavBlob.size,
-          type: wavBlob.type
-        });
-
-        // Check blob size again before sending
-        if (wavBlob.size <= 44) {
-            console.error('Warning: WAV blob size is suspiciously small. No audio data captured?');
-            setError('No audio detected. Please try speaking louder or closer to the mic.');
-            return; // Don't attempt transcription if likely empty
-        }
-
-        await transcribeAudio(wavBlob);
-      } catch (err) {
-        console.error('Error processing or transcribing audio:', err);
-        setError('Failed to process recording. Please try again.');
-      } finally {
-         audioChunksRef.current = []; // Clear chunks after processing
-      }
-    } else {
-      console.warn('No audio chunks recorded.');
-      setError('No audio recorded. Please try again.');
-    }
-  };
-
-  // Helper function for cleanup
-  const cleanupAudioResources = () => {
+  // Helper function for cleanup (wrapped in useCallback)
+  const cleanupAudioResources = useCallback(() => {
     console.log("Cleaning up audio resources...");
     // Disconnect nodes first
     if (processorRef.current) {
@@ -135,13 +43,15 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       console.log("Media stream stopped.");
     }
 
-    // Close audio context (optional, can be reused)
+    // Optional: Close audio context - decided against closing automatically to allow reuse
     // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
     //   audioContextRef.current.close().then(() => console.log("Audio context closed."));
+    //   audioContextRef.current = null; 
     // }
-  };
+  }, []); // No dependencies as it only interacts with refs
 
-  const convertToWav = (chunks: Float32Array[]): Blob => {
+  // Convert to WAV function (wrapped in useCallback)
+  const convertToWav = useCallback((chunks: Float32Array[]): Blob => {
     const sampleRate = 44100;
     const numChannels = 1;
     const bitDepth = 16;
@@ -155,8 +65,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
     if (totalLength === 0) {
         console.error("Cannot convert to WAV: No audio data provided.");
-        // Return an empty blob or throw an error, here returning minimal header
-        // Although the check in stopRecordingInternal should prevent this
         return new Blob([new ArrayBuffer(44)], { type: 'audio/wav' }); 
     }
     
@@ -167,17 +75,17 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     const wavHeader = new ArrayBuffer(44);
     const view = new DataView(wavHeader);
     
-    // RIFF identifier
-    view.setUint32(0, 0x46464952, false); // "RIFF"
+    // RIFF identifier ("RIFF")
+    view.setUint32(0, 0x46464952, false); 
     // File size (header size + data size)
     view.setUint32(4, 36 + totalLength * bytesPerSample, true);
-    // WAVE identifier
-    view.setUint32(8, 0x45564157, false); // "WAVE"
-    // fmt chunk identifier
-    view.setUint32(12, 0x20746d66, false); // "fmt "
-    // fmt chunk length
-    view.setUint32(16, 16, true); // 16 for PCM
-    // Audio format (PCM)
+    // WAVE identifier ("WAVE")
+    view.setUint32(8, 0x45564157, false); 
+    // fmt chunk identifier ("fmt ")
+    view.setUint32(12, 0x20746d66, false); 
+    // fmt chunk length (16 for PCM)
+    view.setUint32(16, 16, true); 
+    // Audio format (PCM=1)
     view.setUint16(20, format, true);
     // Number of channels
     view.setUint16(22, numChannels, true);
@@ -189,9 +97,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     view.setUint16(32, blockAlign, true);
     // Bits per sample
     view.setUint16(34, bitDepth, true);
-    // data chunk identifier
-    view.setUint32(36, 0x61746164, false); // "data"
-    // data chunk size
+    // data chunk identifier ("data")
+    view.setUint32(36, 0x61746164, false); 
+    // data chunk size (TotalSamples * NumChannels * BitsPerSample/8)
     view.setUint32(40, totalLength * bytesPerSample, true);
     
     // Convert Float32 data to 16-bit PCM
@@ -209,9 +117,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     const wavBlob = new Blob([view, pcmData.buffer], { type: 'audio/wav' });
     
     return wavBlob;
-  };
+  }, []); // No dependencies
 
-  const transcribeAudio = async (audioBlob: Blob) => {
+  // Transcribe function (wrapped in useCallback)
+  const transcribeAudio = useCallback(async (audioBlob: Blob) => {
+    // Reset error before transcription attempt
+    setError(null); 
     try {
       console.log('Sending audio to API:', {
         size: audioBlob.size,
@@ -220,8 +131,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.wav');
-      // No need to append model here if it's handled by the API route
-      // formData.append('model', 'whisper-1'); 
 
       const response = await fetch('/api/transcribe', {
         method: 'POST',
@@ -229,11 +138,18 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          // Handle cases where the response is not valid JSON (e.g., plain text error)
+          const textError = await response.text();
+          console.error('API Error Response (non-JSON):', textError);
+          throw new Error(`Transcription failed: ${response.status} ${response.statusText}. Server response: ${textError}`);
+        }
         console.error('API Error Response:', errorData);
-        // Provide more specific error based on status
         let errorMessage = `Transcription failed with status ${response.status}`;
-        if (errorData.error) {
+        if (errorData && errorData.error) {
           errorMessage = errorData.error; // Use error message from API if available
         }
         throw new Error(errorMessage);
@@ -244,21 +160,161 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         onResult(data.text);
       } else {
          console.warn("Transcription result is empty or whitespace.")
-        // More specific feedback if transcription is empty
         setError('Could not understand audio. Please try speaking clearly.');
       }
     } catch (err) {
       console.error('Error transcribing audio:', err);
-      // Set error state based on the caught error message
       setError(err instanceof Error ? err.message : 'Failed to transcribe audio. Please try again.');
     } 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onResult]); // Dependency: onResult prop
+
+  // Stop recording function (wrapped in useCallback)
+  const stopRecordingInternal = useCallback(async () => {
+    // Use the ref to check the *actual* current listening state
+    if (!isListeningRef.current && !streamRef.current) {
+      console.log("Stop recording called but not currently listening or stream not active.");
+      return; 
+    }
+    
+    console.log("Stopping recording...");
+    setIsListening(false); // Trigger state update which updates isListeningRef via useEffect
+
+    // Get chunks *before* cleanup disconnects the processor
+    const recordedChunks = [...audioChunksRef.current]; 
+    audioChunksRef.current = []; // Clear chunks immediately after copying
+
+    cleanupAudioResources();
+
+    // Process accumulated chunks
+    if (recordedChunks.length > 0) {
+      console.log(`Processing ${recordedChunks.length} audio chunks.`);
+      try {
+        const wavBlob = convertToWav(recordedChunks);
+        console.log('Final Audio Blob:', {
+          size: wavBlob.size,
+          type: wavBlob.type
+        });
+
+        // Check blob size again before sending
+        if (wavBlob.size <= 44) {
+            console.error('Warning: WAV blob size indicates no audio data captured.');
+            setError('No audio detected. Please try speaking louder or closer to the mic.');
+            return; // Don't attempt transcription if likely empty
+        }
+
+        await transcribeAudio(wavBlob);
+      } catch (err) {
+        console.error('Error processing or transcribing audio:', err);
+        // Error state is set within transcribeAudio, no need to set here unless convertToWav fails
+        if (!(err instanceof Error && err.message.includes('Transcription failed'))) {
+          setError('Failed to process recording. Please try again.');
+        }
+      }
+    } else {
+      console.warn('No audio chunks recorded.');
+      // Check if the stream was ever active - maybe mic permission denied late?
+      if (!streamRef.current) { // Check if stream was successfully created
+         setError('Failed to start recording. Check mic permissions.');
+      } else {
+         setError('No audio recorded. Please try again.');
+      }
+    }
+  }, [setIsListening, cleanupAudioResources, convertToWav, transcribeAudio]); // Dependencies
+
+  // Effect for component mount/unmount cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Ensure cleanup happens on unmount
+      // Use the ref value at the time of unmount
+      if (isListeningRef.current) {
+        stopRecordingInternal(); 
+      }
+    };
+  }, [stopRecordingInternal]); // Dependency: stopRecordingInternal
+
+  const startRecording = async () => {
+    try {
+      setError(null);
+      audioChunksRef.current = []; // Reset chunks
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100, 
+          channelCount: 1
+        }
+      });
+      streamRef.current = stream;
+      
+      // Create audio context if it doesn't exist or is closed
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+         // Ensure any previous context is properly closed before creating a new one
+         if (audioContextRef.current) {
+             await audioContextRef.current.close();
+         }
+        audioContextRef.current = new AudioContext({ sampleRate: 44100 }); // Specify sample rate
+        console.log('AudioContext created or reused.');
+      }
+      const audioContext = audioContextRef.current;
+      
+      // Create nodes
+      sourceNodeRef.current = audioContext.createMediaStreamSource(stream);
+      // Buffer size recommendation: power of 2, e.g., 4096. Larger buffer = more latency, smaller = more CPU
+      processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
+
+      const processor = processorRef.current;
+      const source = sourceNodeRef.current;
+      
+      processor.onaudioprocess = (e) => {
+        // Use the ref to check listening state reliably
+        if (isListeningRef.current) { 
+          // Get a copy of the input buffer data
+          const inputData = e.inputBuffer.getChannelData(0);
+          // Store a copy, not the original buffer
+          audioChunksRef.current.push(new Float32Array(inputData)); 
+        } else {
+           // Optional: Log if process event fires while not listening, might indicate cleanup issue
+           // console.log("onaudioprocess fired while not listening.");
+        }
+      };
+      
+      // Connect the nodes: source -> processor -> destination
+      source.connect(processor);
+      // It's important to connect the processor to the destination to keep the audio graph alive
+      // even if you don't want to hear the live audio.
+      processor.connect(audioContext.destination); 
+      
+      console.log("Audio nodes connected, starting listening state.");
+      setIsListening(true); // Update state -> triggers useEffect -> updates isListeningRef
+      
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      let message = 'Failed to start recording. Check mic permissions & use Chrome.';
+      if (err instanceof Error) {
+          if (err.name === 'NotAllowedError' || err.message.includes('permission denied')) {
+              message = 'Microphone permission denied. Please allow access.';
+          } else if (err.name === 'NotFoundError' || err.message.includes('not found')) {
+              message = 'No microphone found. Please ensure it is connected.';
+          } else if (err.message.includes('sampleRate')) {
+              message = 'Could not set desired audio sample rate (44.1kHz). Try a different mic or browser.';
+          }
+      }
+      setError(message);
+      setIsListening(false);
+      cleanupAudioResources(); // Ensure cleanup on error
+    }
   };
+
 
   return (
     <div className="voice-button-container">
       <button 
         className={`voice-button ${isListening ? 'listening' : ''}`}
-        onClick={isListening ? stopRecordingInternal : startRecording} // Use internal stop function
+        onClick={isListening ? stopRecordingInternal : startRecording} 
         aria-label={isListening ? "Stop recording" : "Start recording"}
       >
         {isListening ? 'Stop Recording' : 'Start Recording'}
