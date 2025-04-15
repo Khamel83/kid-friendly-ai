@@ -18,7 +18,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      // Clear any pending cleanup timeout
       if (cleanupTimeoutRef.current) {
         clearTimeout(cleanupTimeoutRef.current);
       }
@@ -34,49 +33,38 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      // List of preferred MIME types for audio recording
-      // We try MP3 first as it's widely supported and works well with Whisper API
-      // Fallback to other formats if MP3 is not available
-      const mimeTypes = [
-        'audio/mp3',
-        'audio/mpeg',
-        'audio/webm',
-        'audio/wav',
-        'audio/ogg'
-      ];
+      // Force MP3 format as it's widely supported
+      const mimeType = 'audio/mp3';
       
-      let selectedMimeType = '';
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          break;
-        }
-      }
-      
-      if (!selectedMimeType) {
-        throw new Error('No supported audio format found');
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        throw new Error('MP3 format is not supported in this browser');
       }
       
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: selectedMimeType
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000 // Set a reasonable bitrate
       });
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          console.log('Audio chunk received:', event.data.size, 'bytes');
         }
       };
 
       mediaRecorder.onstop = async () => {
         if (!isMountedRef.current) return;
         
-        const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
-        console.log('Audio Blob:', audioBlob);
-        console.log('Audio Blob Type:', audioBlob.type);
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log('Final Audio Blob:', {
+          size: audioBlob.size,
+          type: audioBlob.type,
+          chunks: audioChunksRef.current.length
+        });
+        
         await transcribeAudio(audioBlob);
         
-        // Clean up with a small delay to ensure all events are processed
         cleanupTimeoutRef.current = setTimeout(() => {
           if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
@@ -87,14 +75,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         }, 100);
       };
 
-      // Start recording with a 100ms timeslice to get more frequent updates
       mediaRecorder.start(100);
       setIsListening(true);
     } catch (err) {
       console.error('Error starting recording:', err);
       setError('Failed to start recording. Please check your microphone permissions.');
       setIsListening(false);
-      // Ensure cleanup on error
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -116,6 +102,11 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   const transcribeAudio = async (audioBlob: Blob) => {
     try {
+      console.log('Sending audio to API:', {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.mp3');
       formData.append('model', 'whisper-1');
@@ -127,7 +118,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Transcription failed');
+        console.error('API Error Response:', errorData);
+        throw new Error(errorData.error || `Transcription failed with status ${response.status}`);
       }
 
       const data = await response.json();
