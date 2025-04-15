@@ -12,11 +12,16 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const audioChunksRef = useRef<Blob[]>([]);
   const isMountedRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      // Clear any pending cleanup timeout
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+      }
       stopRecording();
     };
   }, []);
@@ -67,13 +72,19 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         if (!isMountedRef.current) return;
         
         const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+        console.log('Audio Blob:', audioBlob);
+        console.log('Audio Blob Type:', audioBlob.type);
         await transcribeAudio(audioBlob);
         
-        // Clean up
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
+        // Clean up with a small delay to ensure all events are processed
+        cleanupTimeoutRef.current = setTimeout(() => {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          mediaRecorderRef.current = null;
+          setIsListening(false);
+        }, 100);
       };
 
       // Start recording with a 100ms timeslice to get more frequent updates
@@ -83,6 +94,11 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       console.error('Error starting recording:', err);
       setError('Failed to start recording. Please check your microphone permissions.');
       setIsListening(false);
+      // Ensure cleanup on error
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     }
   };
 
@@ -94,6 +110,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    mediaRecorderRef.current = null;
     setIsListening(false);
   };
 
