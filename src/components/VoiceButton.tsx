@@ -8,19 +8,13 @@ interface VoiceButtonProps {
 
 export default function VoiceButton({ onResult, isListening, setIsListening }: VoiceButtonProps) {
   const [error, setError] = useState<string | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const isMountedRef = useRef(true);
   const streamRef = useRef<MediaStream | null>(null);
-  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      if (cleanupTimeoutRef.current) {
-        clearTimeout(cleanupTimeoutRef.current);
-      }
       stopRecording();
     };
   }, []);
@@ -28,55 +22,40 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const startRecording = async () => {
     try {
       setError(null);
-      audioChunksRef.current = [];
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100,
+          channelCount: 1
+        }
+      });
       streamRef.current = stream;
       
-      // Use WAV format which is widely supported
-      const mimeType = 'audio/wav';
+      // Create audio context
+      const audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
       
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        throw new Error('Audio recording is not supported in this browser');
-      }
+      const audioChunks: Float32Array[] = [];
       
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        audioBitsPerSecond: 128000
-      });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          console.log('Audio chunk received:', event.data.size, 'bytes');
+      processor.onaudioprocess = (e) => {
+        if (isListening) {
+          audioChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
         }
       };
-
-      mediaRecorder.onstop = async () => {
-        if (!isMountedRef.current) return;
-        
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        console.log('Final Audio Blob:', {
-          size: audioBlob.size,
-          type: audioBlob.type,
-          chunks: audioChunksRef.current.length
-        });
-        
-        await transcribeAudio(audioBlob);
-        
-        cleanupTimeoutRef.current = setTimeout(() => {
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-          }
-          mediaRecorderRef.current = null;
-          setIsListening(false);
-        }, 100);
-      };
-
-      mediaRecorder.start(100);
+      
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      
       setIsListening(true);
+      
+      // Store the audio context and processor for cleanup
+      (window as any).audioContext = audioContext;
+      (window as any).audioProcessor = processor;
+      (window as any).audioChunks = audioChunks;
+      
     } catch (err) {
       console.error('Error starting recording:', err);
       setError('Failed to start recording. Please check your microphone permissions and try using Chrome browser.');
@@ -88,16 +67,96 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+  const stopRecording = async () => {
+    if (!isListening) return;
+    
+    try {
+      setIsListening(false);
+      
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      
+      // Get the recorded audio data
+      const audioChunks = (window as any).audioChunks as Float32Array[];
+      const audioContext = (window as any).audioContext as AudioContext;
+      const processor = (window as any).audioProcessor as ScriptProcessorNode;
+      
+      if (processor) {
+        processor.disconnect();
+      }
+      
+      if (audioContext) {
+        await audioContext.close();
+      }
+      
+      // Convert Float32Array chunks to WAV format
+      const wavBlob = convertToWav(audioChunks);
+      console.log('Final Audio Blob:', {
+        size: wavBlob.size,
+        type: wavBlob.type
+      });
+      
+      await transcribeAudio(wavBlob);
+      
+    } catch (err) {
+      console.error('Error stopping recording:', err);
+      setError('Failed to process recording. Please try again.');
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+  };
+
+  const convertToWav = (audioChunks: Float32Array[]): Blob => {
+    const sampleRate = 44100;
+    const numChannels = 1;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    
+    // Calculate total length
+    let totalLength = 0;
+    for (const chunk of audioChunks) {
+      totalLength += chunk.length;
     }
-    mediaRecorderRef.current = null;
-    setIsListening(false);
+    
+    // Create WAV header
+    const wavHeader = new ArrayBuffer(44);
+    const view = new DataView(wavHeader);
+    
+    // Write WAV header
+    view.setUint32(0, 0x46464952, true); // "RIFF"
+    view.setUint32(4, 36 + totalLength * bytesPerSample, true); // file length
+    view.setUint32(8, 0x45564157, true); // "WAVE"
+    view.setUint32(12, 0x20746d66, true); // "fmt "
+    view.setUint32(16, 16, true); // length of format chunk
+    view.setUint16(20, format, true); // format type
+    view.setUint16(22, numChannels, true); // number of channels
+    view.setUint32(24, sampleRate, true); // sample rate
+    view.setUint32(28, sampleRate * blockAlign, true); // bytes per second
+    view.setUint16(32, blockAlign, true); // bytes per sample
+    view.setUint16(34, bitDepth, true); // bits per sample
+    view.setUint32(36, 0x61746164, true); // "data"
+    view.setUint32(40, totalLength * bytesPerSample, true); // data length
+    
+    // Convert audio data to 16-bit PCM
+    const pcmData = new Int16Array(totalLength);
+    let offset = 0;
+    for (const chunk of audioChunks) {
+      for (let i = 0; i < chunk.length; i++) {
+        const s = Math.max(-1, Math.min(1, chunk[i]));
+        pcmData[offset++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+    }
+    
+    // Combine header and data
+    const wavBlob = new Blob(
+      [wavHeader, pcmData.buffer],
+      { type: 'audio/wav' }
+    );
+    
+    return wavBlob;
   };
 
   const transcribeAudio = async (audioBlob: Blob) => {

@@ -37,7 +37,6 @@ export default async function handler(
     const parts = buffer.toString().split(`--${boundary}`);
     let audioData: Buffer | null = null;
     let filename = '';
-    let contentType = '';
 
     for (const part of parts) {
       if (part.includes('Content-Disposition: form-data')) {
@@ -47,12 +46,6 @@ export default async function handler(
           const dataStart = part.indexOf('\r\n\r\n') + 4;
           const dataEnd = part.lastIndexOf('\r\n');
           audioData = Buffer.from(part.slice(dataStart, dataEnd));
-          
-          // Extract content type if available
-          const contentTypeMatch = part.match(/Content-Type: ([^\r\n]+)/);
-          if (contentTypeMatch) {
-            contentType = contentTypeMatch[1];
-          }
         }
       }
     }
@@ -63,13 +56,12 @@ export default async function handler(
 
     console.log('Received audio data:', {
       size: audioData.length,
-      contentType,
       filename
     });
 
-    // Create a temporary file with the correct content type
+    // Create a temporary file with WAV format
     const file = new File([audioData], filename, { 
-      type: 'audio/wav' // Force WAV type
+      type: 'audio/wav'
     });
 
     console.log('Created File object:', {
@@ -83,6 +75,7 @@ export default async function handler(
       file: file,
       model: 'whisper-1',
       language: 'en', // Specify English to improve accuracy
+      response_format: 'json'
     });
 
     return res.status(200).json({ text: response.text });
