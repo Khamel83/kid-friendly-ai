@@ -20,27 +20,54 @@ export default async function handler(
   }
 
   try {
-    const formData = await new Promise<FormData>((resolve, reject) => {
-      const chunks: Buffer[] = [];
-      req.on('data', (chunk) => chunks.push(chunk));
-      req.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        const formData = new FormData();
-        formData.append('file', new Blob([buffer], { type: 'audio/webm' }), 'audio.webm');
-        formData.append('model', 'whisper-1');
-        resolve(formData);
-      });
-      req.on('error', reject);
-    });
+    // Get the raw body data
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
 
+    // Create a FormData-like object
+    const boundary = req.headers['content-type']?.split('boundary=')[1];
+    if (!boundary) {
+      throw new Error('No boundary found in content-type header');
+    }
+
+    // Parse the multipart form data
+    const parts = buffer.toString().split(`--${boundary}`);
+    let audioData: Buffer | null = null;
+    let filename = '';
+
+    for (const part of parts) {
+      if (part.includes('Content-Disposition: form-data')) {
+        const match = part.match(/name="file"; filename="([^"]+)"/);
+        if (match) {
+          filename = match[1];
+          const dataStart = part.indexOf('\r\n\r\n') + 4;
+          const dataEnd = part.lastIndexOf('\r\n');
+          audioData = Buffer.from(part.slice(dataStart, dataEnd));
+        }
+      }
+    }
+
+    if (!audioData) {
+      throw new Error('No audio data found in request');
+    }
+
+    // Create a temporary file
+    const file = new File([audioData], filename, { type: 'audio/webm' });
+
+    // Send to OpenAI
     const response = await openai.audio.transcriptions.create({
-      file: formData.get('file') as File,
+      file: file,
       model: 'whisper-1',
     });
 
     return res.status(200).json({ text: response.text });
   } catch (error) {
     console.error('Error transcribing audio:', error);
-    return res.status(500).json({ error: 'Failed to transcribe audio' });
+    return res.status(500).json({ 
+      error: error instanceof Error ? error.message : 'Failed to transcribe audio' 
+    });
   }
 } 

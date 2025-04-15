@@ -11,6 +11,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const isMountedRef = useRef(true);
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -26,6 +27,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       audioChunksRef.current = [];
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
@@ -42,10 +45,14 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         await transcribeAudio(audioBlob);
         
         // Clean up
-        stream.getTracks().forEach(track => track.stop());
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
 
-      mediaRecorder.start();
+      // Start recording with a 100ms timeslice to get more frequent updates
+      mediaRecorder.start(100);
       setIsListening(true);
     } catch (err) {
       console.error('Error starting recording:', err);
@@ -57,6 +64,10 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     setIsListening(false);
   };
@@ -73,7 +84,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       });
 
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Transcription failed');
       }
 
       const data = await response.json();
@@ -95,7 +107,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         onClick={isListening ? stopRecording : startRecording}
         aria-label={isListening ? "Stop recording" : "Start recording"}
       >
-        {isListening ? 'I\'m Listening...' : 'Tap to Ask a Question'}
+        {isListening ? 'Stop Recording' : 'Start Recording'}
         <div className={`pulse-ring ${isListening ? 'animate' : ''}`}></div>
       </button>
       
