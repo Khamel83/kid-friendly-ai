@@ -9,12 +9,16 @@ interface VoiceButtonProps {
 export default function VoiceButton({ onResult, isListening, setIsListening }: VoiceButtonProps) {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const recognitionRef = useRef<any>(null);
   const startSoundRef = useRef<HTMLAudioElement | null>(null);
   const endSoundRef = useRef<HTMLAudioElement | null>(null);
   const initializedRef = useRef(false);
   const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
+  const retryCountRef = useRef(0);
+  const maxRetries = 3;
+  const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check browser audio capabilities
   const canPlayAudio = () => {
@@ -66,6 +70,119 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     };
   }, []);
 
+  const initializeSpeechRecognition = () => {
+    try {
+      console.log('Creating SpeechRecognition instance...');
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      
+      // Configure recognition settings
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.maxAlternatives = 1;
+      
+      // Set up event handlers
+      recognitionRef.current.onstart = () => {
+        if (!isMountedRef.current) return;
+        console.log('Speech recognition started');
+        setIsListening(true);
+        setError(null);
+        isStartingRef.current = false;
+        playSound(startSoundRef.current);
+
+        // Set timeout for no speech detection
+        noSpeechTimeoutRef.current = setTimeout(() => {
+          if (isMountedRef.current && isListening) {
+            console.log('No speech detected within timeout');
+            stopListening();
+            setError('No speech detected. Please try again.');
+          }
+        }, 10000); // 10 seconds timeout
+      };
+
+      recognitionRef.current.onresult = (event: any) => {
+        if (!isMountedRef.current) return;
+        console.log('Speech recognition result:', event);
+        const current = event.resultIndex;
+        const result = event.results[current][0].transcript;
+        console.log('Recognized text:', result);
+        setTranscript(result);
+        stopListening();
+        onResult(result);
+        retryCountRef.current = 0; // Reset retry count on success
+      };
+
+      recognitionRef.current.onerror = (event: any) => {
+        if (!isMountedRef.current) return;
+        console.error('Speech recognition error:', event);
+        isStartingRef.current = false;
+        
+        let errorMessage = 'I couldn\'t hear that. Can you try again?';
+        let shouldRetry = false;
+        
+        switch (event.error) {
+          case 'no-speech':
+            errorMessage = 'No speech was detected. Please try again.';
+            shouldRetry = true;
+            break;
+          case 'aborted':
+            errorMessage = 'Speech recognition was aborted. Please try again.';
+            shouldRetry = true;
+            break;
+          case 'audio-capture':
+            errorMessage = 'No microphone was found. Please ensure a microphone is connected.';
+            break;
+          case 'network':
+            errorMessage = 'Network error occurred. Please check your connection.';
+            shouldRetry = true;
+            break;
+          case 'not-allowed':
+            errorMessage = 'Microphone access was denied. Please allow microphone access.';
+            break;
+          case 'service-not-allowed':
+            errorMessage = 'Speech recognition service is not allowed. Please try again later.';
+            break;
+          default:
+            errorMessage = `Error: ${event.error}. Please try again.`;
+            shouldRetry = true;
+        }
+        
+        setError(errorMessage);
+        stopListening();
+
+        // Handle retry logic
+        if (shouldRetry && retryCountRef.current < maxRetries) {
+          retryCountRef.current++;
+          console.log(`Retrying speech recognition (attempt ${retryCountRef.current}/${maxRetries})`);
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              startListening();
+            }
+          }, 1000); // Wait 1 second before retrying
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        if (!isMountedRef.current) return;
+        console.log('Speech recognition ended');
+        setIsListening(false);
+        isStartingRef.current = false;
+        if (noSpeechTimeoutRef.current) {
+          clearTimeout(noSpeechTimeoutRef.current);
+          noSpeechTimeoutRef.current = null;
+        }
+      };
+      
+      console.log('VoiceButton initialization complete');
+      setIsInitializing(false);
+    } catch (err) {
+      console.error('Error initializing speech recognition:', err);
+      setError('Failed to initialize speech recognition. Please try again.');
+      setIsInitializing(false);
+    }
+  };
+
   // Initialize speech recognition
   useEffect(() => {
     isMountedRef.current = true;
@@ -79,6 +196,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     // Check if we're in a browser environment
     if (typeof window === 'undefined') {
       console.log('Not in browser environment');
+      setIsInitializing(false);
       return;
     }
 
@@ -88,6 +206,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const errorMsg = 'Speech recognition is not supported in this browser. Please use a Chromium-based browser like Chrome, Edge, or Arc.';
       console.error(errorMsg);
       setError(errorMsg);
+      setIsInitializing(false);
       return;
     }
 
@@ -96,85 +215,11 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const errorMsg = 'Speech recognition requires a secure context (HTTPS) or localhost.';
       console.error(errorMsg);
       setError(errorMsg);
+      setIsInitializing(false);
       return;
     }
 
-    try {
-      console.log('Creating SpeechRecognition instance...');
-      recognitionRef.current = new SpeechRecognition();
-      
-      // Configure recognition settings
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
-      
-      // Set up event handlers
-      recognitionRef.current.onstart = () => {
-        if (!isMountedRef.current) return;
-        console.log('Speech recognition started');
-        setIsListening(true);
-        setError(null);
-        isStartingRef.current = false;
-        playSound(startSoundRef.current);
-      };
-
-      recognitionRef.current.onresult = (event: any) => {
-        if (!isMountedRef.current) return;
-        console.log('Speech recognition result:', event);
-        const current = event.resultIndex;
-        const result = event.results[current][0].transcript;
-        console.log('Recognized text:', result);
-        setTranscript(result);
-        stopListening();
-        onResult(result);
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        if (!isMountedRef.current) return;
-        console.error('Speech recognition error:', event);
-        isStartingRef.current = false;
-        
-        let errorMessage = 'I couldn\'t hear that. Can you try again?';
-        
-        switch (event.error) {
-          case 'no-speech':
-            errorMessage = 'No speech was detected. Please try again.';
-            break;
-          case 'aborted':
-            errorMessage = 'Speech recognition was aborted. Please try again.';
-            break;
-          case 'audio-capture':
-            errorMessage = 'No microphone was found. Please ensure a microphone is connected.';
-            break;
-          case 'network':
-            errorMessage = 'Network error occurred. Please check your connection.';
-            break;
-          case 'not-allowed':
-            errorMessage = 'Microphone access was denied. Please allow microphone access.';
-            break;
-          case 'service-not-allowed':
-            errorMessage = 'Speech recognition service is not allowed. Please try again later.';
-            break;
-          default:
-            errorMessage = `Error: ${event.error}. Please try again.`;
-        }
-        
-        setError(errorMessage);
-        stopListening();
-      };
-
-      recognitionRef.current.onend = () => {
-        if (!isMountedRef.current) return;
-        console.log('Speech recognition ended');
-        setIsListening(false);
-        isStartingRef.current = false;
-      };
-      
-      console.log('VoiceButton initialization complete');
-    } catch (err) {
-      console.error('Error initializing speech recognition:', err);
-      setError('Failed to initialize speech recognition. Please try again.');
-    }
+    initializeSpeechRecognition();
 
     return () => {
       isMountedRef.current = false;
@@ -182,6 +227,10 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         console.log('Cleaning up speech recognition');
         recognitionRef.current.abort();
         recognitionRef.current = null;
+      }
+      if (noSpeechTimeoutRef.current) {
+        clearTimeout(noSpeechTimeoutRef.current);
+        noSpeechTimeoutRef.current = null;
       }
     };
   }, [onResult, setIsListening]);
@@ -249,6 +298,10 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         recognitionRef.current.stop();
         setIsListening(false);
         isStartingRef.current = false;
+        if (noSpeechTimeoutRef.current) {
+          clearTimeout(noSpeechTimeoutRef.current);
+          noSpeechTimeoutRef.current = null;
+        }
       } catch (err) {
         console.error('Error stopping speech recognition:', err);
       }
@@ -257,10 +310,16 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   return (
     <div className="voice-button-container">
+      {isInitializing && (
+        <div className="initializing-message">
+          Initializing speech recognition...
+        </div>
+      )}
       <button 
-        className={`voice-button ${isListening ? 'listening' : ''}`}
+        className={`voice-button ${isListening ? 'listening' : ''} ${isInitializing ? 'disabled' : ''}`}
         onClick={isListening ? stopListening : startListening}
         aria-label={isListening ? "Stop listening" : "Start listening"}
+        disabled={isInitializing}
       >
         {isListening ? 'I\'m Listening...' : 'Tap to Ask a Question'}
         <div className={`pulse-ring ${isListening ? 'animate' : ''}`}></div>
