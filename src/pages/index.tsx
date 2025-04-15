@@ -15,7 +15,13 @@ export default function Home() {
   // Initialize speech synthesis
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      synth.current = window.speechSynthesis;
+      try {
+        synth.current = window.speechSynthesis;
+        console.log('Available voices:', synth.current.getVoices());
+      } catch (err) {
+        console.error('Error initializing speech synthesis:', err);
+        setErrorMessage('Speech synthesis is not available in this browser.');
+      }
     }
     
     return () => {
@@ -27,6 +33,7 @@ export default function Home() {
 
   const handleQuestionSubmit = async (text: string) => {
     try {
+      console.log('Submitting question:', text);
       setQuestion(text);
       setIsLoading(true);
       setErrorMessage('');
@@ -40,6 +47,7 @@ export default function Home() {
       });
       
       const data = await response.json();
+      console.log('API response:', data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Something went wrong');
@@ -62,43 +70,63 @@ export default function Home() {
         synth.current.cancel();
       }
       
-      const utterance = new SpeechSynthesisUtterance(text);
-      
-      // Use a child-friendly voice if available
-      const voices = synth.current.getVoices();
-      const kidVoice = voices.find(voice => 
-        voice.name.includes('Kid') || 
-        voice.name.includes('child') || 
-        voice.name.includes('Junior')
-      );
-      
-      if (kidVoice) {
-        utterance.voice = kidVoice;
-      } else {
-        // Try to find a friendly female voice as fallback
-        const femaleVoice = voices.find(voice => 
-          voice.name.includes('Female') || 
-          voice.name.includes('Girl') ||
-          (!voice.name.includes('Male') && voice.lang.includes('en-US'))
+      try {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Use a child-friendly voice if available
+        const voices = synth.current.getVoices();
+        console.log('Available voices:', voices);
+        
+        const kidVoice = voices.find(voice => 
+          voice.name.includes('Kid') || 
+          voice.name.includes('child') || 
+          voice.name.includes('Junior')
         );
         
-        if (femaleVoice) {
-          utterance.voice = femaleVoice;
+        if (kidVoice) {
+          console.log('Using kid voice:', kidVoice.name);
+          utterance.voice = kidVoice;
+        } else {
+          // Try to find a friendly female voice as fallback
+          const femaleVoice = voices.find(voice => 
+            voice.name.includes('Female') || 
+            voice.name.includes('Girl') ||
+            (!voice.name.includes('Male') && voice.lang.includes('en-US'))
+          );
+          
+          if (femaleVoice) {
+            console.log('Using female voice:', femaleVoice.name);
+            utterance.voice = femaleVoice;
+          }
         }
+        
+        // Slightly slower speech rate for clarity
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
+        
+        utterance.onstart = () => {
+          console.log('Speech started');
+          speakingRef.current = true;
+        };
+        
+        utterance.onend = () => {
+          console.log('Speech ended');
+          speakingRef.current = false;
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('Speech error:', event);
+          speakingRef.current = false;
+        };
+        
+        utteranceRef.current = utterance;
+        synth.current.speak(utterance);
+      } catch (err) {
+        console.error('Error in speech synthesis:', err);
+        setErrorMessage('Could not read the response aloud. Please try again.');
       }
-      
-      // Slightly slower speech rate for clarity
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
-      
-      utteranceRef.current = utterance;
-      speakingRef.current = true;
-      
-      utterance.onend = () => {
-        speakingRef.current = false;
-      };
-      
-      synth.current.speak(utterance);
+    } else {
+      setErrorMessage('Speech synthesis is not available in this browser.');
     }
   };
 

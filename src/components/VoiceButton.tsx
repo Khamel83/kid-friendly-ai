@@ -15,37 +15,53 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   useEffect(() => {
     // Initialize the Web Speech API
-    if (typeof window !== 'undefined' && 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
+    if (typeof window !== 'undefined') {
+      try {
+        const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+        
+        if (!SpeechRecognition) {
+          setError('Speech recognition is not supported in this browser. Please use Chrome.');
+          return;
+        }
 
-      recognitionRef.current.onresult = (event: any) => {
-        const current = event.resultIndex;
-        const result = event.results[current][0].transcript;
-        setTranscript(result);
-        stopListening();
-        onResult(result);
-      };
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error', event.error);
-        setError(`I couldn't hear that. Can you try again?`);
-        stopListening();
-      };
+        recognitionRef.current.onstart = () => {
+          console.log('Speech recognition started');
+          setIsListening(true);
+        };
 
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    } else {
-      setError('Speech recognition is not supported in this browser.');
+        recognitionRef.current.onresult = (event: any) => {
+          console.log('Speech recognition result:', event);
+          const current = event.resultIndex;
+          const result = event.results[current][0].transcript;
+          setTranscript(result);
+          stopListening();
+          onResult(result);
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event);
+          setError(`I couldn't hear that. Can you try again? (Error: ${event.error})`);
+          stopListening();
+        };
+
+        recognitionRef.current.onend = () => {
+          console.log('Speech recognition ended');
+          setIsListening(false);
+        };
+
+        // Load sound effects
+        startSoundRef.current = new Audio('/sounds/start.mp3');
+        endSoundRef.current = new Audio('/sounds/end.mp3');
+      } catch (err) {
+        console.error('Error initializing speech recognition:', err);
+        setError('Failed to initialize speech recognition. Please try again.');
+      }
     }
-
-    // Load sound effects
-    startSoundRef.current = new Audio('/sounds/start.mp3');
-    endSoundRef.current = new Audio('/sounds/end.mp3');
 
     return () => {
       if (recognitionRef.current) {
@@ -60,20 +76,23 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     
     if (recognitionRef.current) {
       try {
+        console.log('Starting speech recognition...');
         startSoundRef.current?.play().catch(e => console.log('Audio play error:', e));
         recognitionRef.current.start();
-        setIsListening(true);
       } catch (err) {
         console.error('Speech recognition error on start:', err);
         setError('Oops! There was a problem. Try tapping the button again.');
         setIsListening(false);
       }
+    } else {
+      setError('Speech recognition is not available. Please use Chrome browser.');
     }
   };
 
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
       try {
+        console.log('Stopping speech recognition...');
         endSoundRef.current?.play().catch(e => console.log('Audio play error:', e));
         recognitionRef.current.stop();
         setIsListening(false);
