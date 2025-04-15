@@ -10,6 +10,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const isStartingRef = useRef(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -22,20 +23,29 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
           throw new Error('Speech recognition not supported');
         }
 
+        // Create new instance
         recognitionRef.current = new SpeechRecognition();
+        
+        // Configure settings
         recognitionRef.current.continuous = false;
         recognitionRef.current.interimResults = false;
         recognitionRef.current.lang = 'en-US';
+        recognitionRef.current.maxAlternatives = 1;
 
+        // Set up event handlers
         recognitionRef.current.onstart = () => {
           if (!isMountedRef.current) return;
+          console.log('Speech recognition started');
           setIsListening(true);
           setError(null);
+          isStartingRef.current = false;
         };
 
         recognitionRef.current.onresult = (event: any) => {
           if (!isMountedRef.current) return;
+          console.log('Speech recognition result:', event);
           const transcript = event.results[0][0].transcript;
+          console.log('Recognized text:', transcript);
           onResult(transcript);
           stopListening();
         };
@@ -43,6 +53,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         recognitionRef.current.onerror = (event: any) => {
           if (!isMountedRef.current) return;
           console.error('Speech recognition error:', event);
+          isStartingRef.current = false;
           
           let errorMessage = 'Speech recognition error. Please try again.';
           switch (event.error) {
@@ -72,7 +83,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
         recognitionRef.current.onend = () => {
           if (!isMountedRef.current) return;
+          console.log('Speech recognition ended');
           setIsListening(false);
+          isStartingRef.current = false;
         };
 
         return true;
@@ -96,6 +109,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
+          recognitionRef.current = null;
         } catch (err) {
           console.error('Error during cleanup:', err);
         }
@@ -104,29 +118,58 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   }, [onResult, setIsListening]);
 
   const startListening = () => {
+    if (isStartingRef.current) {
+      console.log('Already starting speech recognition');
+      return;
+    }
+
     if (!recognitionRef.current) {
       setError('Speech recognition is not available. Please refresh the page.');
       return;
     }
 
     setError(null);
-    try {
-      recognitionRef.current.start();
-    } catch (err) {
-      console.error('Error starting speech recognition:', err);
-      setError('Failed to start speech recognition. Please try again.');
-    }
+    isStartingRef.current = true;
+
+    // Check microphone permissions first
+    navigator.permissions.query({ name: 'microphone' as any })
+      .then(permissionStatus => {
+        if (!isMountedRef.current) return;
+        
+        if (permissionStatus.state === 'denied') {
+          setError('Microphone access was denied. Please allow microphone access in your browser settings.');
+          isStartingRef.current = false;
+          return;
+        }
+        
+        try {
+          console.log('Starting speech recognition...');
+          recognitionRef.current.start();
+        } catch (err) {
+          console.error('Error starting speech recognition:', err);
+          setError('Failed to start speech recognition. Please try again.');
+          setIsListening(false);
+          isStartingRef.current = false;
+        }
+      })
+      .catch(err => {
+        console.error('Error checking microphone permissions:', err);
+        setError('Unable to check microphone permissions. Please try again.');
+        isStartingRef.current = false;
+      });
   };
 
   const stopListening = () => {
     if (recognitionRef.current) {
       try {
+        console.log('Stopping speech recognition...');
         recognitionRef.current.stop();
       } catch (err) {
         console.error('Error stopping speech recognition:', err);
       }
     }
     setIsListening(false);
+    isStartingRef.current = false;
   };
 
   return (
