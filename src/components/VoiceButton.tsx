@@ -70,37 +70,31 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     
     const bytesPerSample = bitDepth / 8;
     const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
     
     // Create WAV header buffer
     const wavHeader = new ArrayBuffer(44);
     const view = new DataView(wavHeader);
     
-    // RIFF identifier ("RIFF")
-    view.setUint32(0, 0x46464952, false); 
-    // File size (header size + data size)
-    view.setUint32(4, 36 + totalLength * bytesPerSample, true);
-    // WAVE identifier ("WAVE")
-    view.setUint32(8, 0x45564157, false); 
-    // fmt chunk identifier ("fmt ")
-    view.setUint32(12, 0x20746d66, false); 
-    // fmt chunk length (16 for PCM)
-    view.setUint32(16, 16, true); 
-    // Audio format (PCM=1)
-    view.setUint16(20, format, true);
-    // Number of channels
-    view.setUint16(22, numChannels, true);
-    // Sample rate
-    view.setUint32(24, sampleRate, true);
-    // Byte rate (SampleRate * NumChannels * BitsPerSample/8)
-    view.setUint32(28, sampleRate * blockAlign, true);
-    // Block align (NumChannels * BitsPerSample/8)
-    view.setUint16(32, blockAlign, true);
-    // Bits per sample
-    view.setUint16(34, bitDepth, true);
-    // data chunk identifier ("data")
-    view.setUint32(36, 0x61746164, false); 
-    // data chunk size (TotalSamples * NumChannels * BitsPerSample/8)
-    view.setUint32(40, totalLength * bytesPerSample, true);
+    // Write WAV header
+    // RIFF chunk descriptor
+    view.setUint32(0, 0x46464952, true); // "RIFF"
+    view.setUint32(4, 36 + totalLength * bytesPerSample, true); // file length
+    view.setUint32(8, 0x45564157, true); // "WAVE"
+    
+    // fmt sub-chunk
+    view.setUint32(12, 0x20746d66, true); // "fmt "
+    view.setUint32(16, 16, true); // length of format chunk
+    view.setUint16(20, format, true); // format type
+    view.setUint16(22, numChannels, true); // number of channels
+    view.setUint32(24, sampleRate, true); // sample rate
+    view.setUint32(28, byteRate, true); // byte rate
+    view.setUint16(32, blockAlign, true); // block align
+    view.setUint16(34, bitDepth, true); // bits per sample
+    
+    // data sub-chunk
+    view.setUint32(36, 0x61746164, true); // "data"
+    view.setUint32(40, totalLength * bytesPerSample, true); // data length
     
     // Convert Float32 data to 16-bit PCM
     const pcmData = new Int16Array(totalLength);
@@ -108,16 +102,15 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     for (const chunk of chunks) {
       for (let i = 0; i < chunk.length; i++) {
         const s = Math.max(-1, Math.min(1, chunk[i]));
-        // Scale to 16-bit range
         pcmData[offset++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
     }
     
     // Combine header and PCM data
-    const wavBlob = new Blob([view, pcmData.buffer], { type: 'audio/wav' });
+    const wavBlob = new Blob([wavHeader, pcmData.buffer], { type: 'audio/wav' });
     
     return wavBlob;
-  }, []); // No dependencies
+  }, []);
 
   // Transcribe function (wrapped in useCallback)
   const transcribeAudio = useCallback(async (audioBlob: Blob) => {
@@ -177,6 +170,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       return; 
     }
     
+    // Prevent double-stopping
+    if (!isListeningRef.current) {
+      console.log("Already stopped recording.");
+      return;
+    }
+
     console.log("Stopping recording...");
     setIsListening(false); // Trigger state update which updates isListeningRef via useEffect
 
@@ -206,21 +205,19 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         await transcribeAudio(wavBlob);
       } catch (err) {
         console.error('Error processing or transcribing audio:', err);
-        // Error state is set within transcribeAudio, no need to set here unless convertToWav fails
         if (!(err instanceof Error && err.message.includes('Transcription failed'))) {
           setError('Failed to process recording. Please try again.');
         }
       }
     } else {
       console.warn('No audio chunks recorded.');
-      // Check if the stream was ever active - maybe mic permission denied late?
-      if (!streamRef.current) { // Check if stream was successfully created
+      if (!streamRef.current) {
          setError('Failed to start recording. Check mic permissions.');
       } else {
          setError('No audio recorded. Please try again.');
       }
     }
-  }, [setIsListening, cleanupAudioResources, convertToWav, transcribeAudio]); // Dependencies
+  }, [setIsListening, cleanupAudioResources, convertToWav, transcribeAudio]);
 
   // Effect for component mount/unmount cleanup
   useEffect(() => {
