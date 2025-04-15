@@ -29,13 +29,15 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      // Try different MIME types in order of preference
+      // List of preferred MIME types for audio recording
+      // We try MP3 first as it's widely supported and works well with Whisper API
+      // Fallback to other formats if MP3 is not available
       const mimeTypes = [
         'audio/mp3',
         'audio/mpeg',
         'audio/webm',
-        'audio/ogg',
-        'audio/wav'
+        'audio/wav',
+        'audio/ogg'
       ];
       
       let selectedMimeType = '';
