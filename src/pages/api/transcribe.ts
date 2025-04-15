@@ -62,7 +62,9 @@ export default async function handler(
     }
 
     // Create a temporary file with the correct content type
-    const file = new File([audioData], filename, { type: contentType || 'audio/mp3' });
+    const file = new File([audioData], filename, { 
+      type: contentType || 'audio/webm' 
+    });
 
     // Send to OpenAI
     const response = await openai.audio.transcriptions.create({
