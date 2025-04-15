@@ -61,9 +61,21 @@ export default async function handler(
       throw new Error('No audio data found in request');
     }
 
+    console.log('Received audio data:', {
+      size: audioData.length,
+      contentType,
+      filename
+    });
+
     // Create a temporary file with the correct content type
     const file = new File([audioData], filename, { 
-      type: contentType || 'audio/webm' 
+      type: 'audio/webm' // Force WebM type
+    });
+
+    console.log('Created File object:', {
+      size: file.size,
+      type: file.type,
+      name: file.name
     });
 
     // Send to OpenAI
@@ -76,6 +88,12 @@ export default async function handler(
     return res.status(200).json({ text: response.text });
   } catch (error) {
     console.error('Error transcribing audio:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+    }
     return res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Failed to transcribe audio' 
     });
