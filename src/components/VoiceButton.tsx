@@ -11,64 +11,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const recognitionRef = useRef<any>(null);
-  const startSoundRef = useRef<HTMLAudioElement | null>(null);
-  const endSoundRef = useRef<HTMLAudioElement | null>(null);
   const initializedRef = useRef(false);
   const isStartingRef = useRef(false);
   const isMountedRef = useRef(true);
   const retryCountRef = useRef(0);
   const maxRetries = 3;
   const noSpeechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Check browser audio capabilities
-  const canPlayAudio = () => {
-    const audio = new Audio();
-    return !!(audio.canPlayType && audio.canPlayType('audio/mpeg'));
-  };
-
-  // Initialize audio files
-  useEffect(() => {
-    if (!canPlayAudio()) {
-      console.warn('Browser does not support audio playback');
-      return;
-    }
-
-    try {
-      console.log('Initializing audio files...');
-      startSoundRef.current = new Audio('/sounds/start.mp3');
-      endSoundRef.current = new Audio('/sounds/end.mp3');
-      
-      // Preload the audio files
-      startSoundRef.current.load();
-      endSoundRef.current.load();
-      
-      // Check if audio files exist
-      startSoundRef.current.addEventListener('error', () => {
-        console.warn('Start sound file not found');
-        startSoundRef.current = null;
-      });
-      
-      endSoundRef.current.addEventListener('error', () => {
-        console.warn('End sound file not found');
-        endSoundRef.current = null;
-      });
-      
-      console.log('Audio files initialized successfully');
-    } catch (err) {
-      console.warn('Failed to initialize audio files:', err);
-    }
-
-    return () => {
-      if (startSoundRef.current) {
-        startSoundRef.current.pause();
-        startSoundRef.current = null;
-      }
-      if (endSoundRef.current) {
-        endSoundRef.current.pause();
-        endSoundRef.current = null;
-      }
-    };
-  }, []);
 
   const initializeSpeechRecognition = () => {
     try {
@@ -89,7 +37,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         setIsListening(true);
         setError(null);
         isStartingRef.current = false;
-        playSound(startSoundRef.current);
 
         // Set timeout for no speech detection
         noSpeechTimeoutRef.current = setTimeout(() => {
@@ -235,17 +182,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     };
   }, [onResult, setIsListening]);
 
-  const playSound = (sound: HTMLAudioElement | null) => {
-    if (sound) {
-      try {
-        sound.currentTime = 0; // Reset the sound to the beginning
-        sound.play().catch(err => console.warn('Failed to play sound:', err));
-      } catch (err) {
-        console.warn('Error playing sound:', err);
-      }
-    }
-  };
-
   const startListening = () => {
     if (isStartingRef.current) {
       console.log('Already starting speech recognition');
@@ -294,7 +230,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     console.log('Stopping listening...');
     if (recognitionRef.current && isListening) {
       try {
-        playSound(endSoundRef.current);
         recognitionRef.current.stop();
         setIsListening(false);
         isStartingRef.current = false;
