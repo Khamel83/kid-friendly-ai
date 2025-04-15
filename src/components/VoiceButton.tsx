@@ -29,7 +29,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/wav'
+      });
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -41,7 +43,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       mediaRecorder.onstop = async () => {
         if (!isMountedRef.current) return;
         
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
         await transcribeAudio(audioBlob);
         
         // Clean up
@@ -75,7 +77,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const transcribeAudio = async (audioBlob: Blob) => {
     try {
       const formData = new FormData();
-      formData.append('file', audioBlob, 'audio.webm');
+      formData.append('file', audioBlob, 'audio.wav');
       formData.append('model', 'whisper-1');
 
       const response = await fetch('/api/transcribe', {

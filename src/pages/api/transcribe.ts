@@ -55,12 +55,13 @@ export default async function handler(
     }
 
     // Create a temporary file
-    const file = new File([audioData], filename, { type: 'audio/webm' });
+    const file = new File([audioData], filename, { type: 'audio/wav' });
 
     // Send to OpenAI
     const response = await openai.audio.transcriptions.create({
       file: file,
       model: 'whisper-1',
+      language: 'en', // Specify English to improve accuracy
     });
 
     return res.status(200).json({ text: response.text });
