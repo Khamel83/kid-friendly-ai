@@ -12,8 +12,13 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const recognitionRef = useRef<any>(null);
   const startSoundRef = useRef<HTMLAudioElement | null>(null);
   const endSoundRef = useRef<HTMLAudioElement | null>(null);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
+    // Prevent multiple initializations
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     console.log('Initializing VoiceButton component...');
     
     // Check if we're in a browser environment
@@ -53,6 +58,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         console.log('Speech recognition started');
         setIsListening(true);
         setError(null);
+        playSound(startSoundRef.current);
       };
 
       recognitionRef.current.onresult = (event: any) => {
@@ -102,8 +108,13 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       };
 
       // Initialize sound effects
-      startSoundRef.current = new Audio('/sounds/start.mp3');
-      endSoundRef.current = new Audio('/sounds/end.mp3');
+      try {
+        startSoundRef.current = new Audio('/sounds/start.mp3');
+        endSoundRef.current = new Audio('/sounds/end.mp3');
+        console.log('Sound effects initialized successfully');
+      } catch (err) {
+        console.warn('Failed to initialize sound effects:', err);
+      }
       
       console.log('VoiceButton initialization complete');
     } catch (err) {
@@ -118,6 +129,13 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       }
     };
   }, [onResult, setIsListening]);
+
+  const playSound = (sound: HTMLAudioElement | null) => {
+    if (sound) {
+      sound.currentTime = 0; // Reset the sound to the beginning
+      sound.play().catch(err => console.warn('Failed to play sound:', err));
+    }
+  };
 
   const startListening = () => {
     console.log('Starting listening...');
@@ -140,7 +158,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         
         try {
           console.log('Starting speech recognition...');
-          startSoundRef.current?.play().catch(e => console.log('Audio play error:', e));
           recognitionRef.current.start();
         } catch (err) {
           console.error('Error starting speech recognition:', err);
@@ -158,7 +175,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     console.log('Stopping listening...');
     if (recognitionRef.current && isListening) {
       try {
-        endSoundRef.current?.play().catch(e => console.log('Audio play error:', e));
+        playSound(endSoundRef.current);
         recognitionRef.current.stop();
         setIsListening(false);
       } catch (err) {
