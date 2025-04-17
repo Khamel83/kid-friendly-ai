@@ -68,32 +68,60 @@ export default function Home() {
          setErrorMessage('Web Audio API is not available in this browser.');
        }
     }
-    // No cleanup needed for AudioContext itself generally
-    // Cleanup for audio source nodes happens in stop functions
+
+    // Add visibility change handler
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && audioContextRef.current?.state === 'suspended') {
+        try {
+          await audioContextRef.current.resume();
+          console.log('AudioContext resumed after visibility change');
+        } catch (error) {
+          console.error('Failed to resume AudioContext:', error);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Ensure fetch is aborted on unmount if active
+    // Add periodic AudioContext state check
+    const checkAudioContextState = async () => {
+      if (audioContextRef.current?.state === 'suspended') {
+        try {
+          await audioContextRef.current.resume();
+          console.log('AudioContext resumed after periodic check');
+        } catch (error) {
+          console.error('Failed to resume AudioContext:', error);
+        }
+      }
+    };
+
+    const intervalId = setInterval(checkAudioContextState, 30000); // Check every 30 seconds
+    
+    // Cleanup
     return () => {
-        // Remove old EventSource cleanup
-        // if (eventSourceRef.current) { ... }
-        
-        // Add cleanup for fetch AbortController
-        if (abortControllerRef.current) {
-            console.log("Aborting fetch request on unmount.");
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-        // Optionally cancel reader too, although abort should handle it
-        if (readerRef.current) {
-           readerRef.current.cancel().catch(e => console.warn("Error cancelling reader on unmount:", e));
-           readerRef.current = null;
-        }
-        if (currentAudioSourceRef.current) {
-            try {
-                currentAudioSourceRef.current.onended = null; // Prevent onended firing
-                currentAudioSourceRef.current.stop();
-            } catch (e) { /* ignore */ }
-            currentAudioSourceRef.current = null;
-        }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+      // No cleanup needed for AudioContext itself generally
+      // Cleanup for audio source nodes happens in stop functions
+      
+      // Ensure fetch is aborted on unmount if active
+      if (abortControllerRef.current) {
+          console.log("Aborting fetch request on unmount.");
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+      }
+      // Optionally cancel reader too, although abort should handle it
+      if (readerRef.current) {
+         readerRef.current.cancel().catch(e => console.warn("Error cancelling reader on unmount:", e));
+         readerRef.current = null;
+      }
+      if (currentAudioSourceRef.current) {
+          try {
+              currentAudioSourceRef.current.onended = null; // Prevent onended firing
+              currentAudioSourceRef.current.stop();
+          } catch (e) { /* ignore */ }
+          currentAudioSourceRef.current = null;
+      }
     };
   }, []);
   // --- End Initialize AudioContext --- 
@@ -356,160 +384,215 @@ export default function Home() {
 
   // --- Handle Text Stream (Simplified - Single TTS Chunk) ---
   const handleQuestionSubmit = async (text: string) => {
-    if (!text || text.trim() === '') return;
-    console.log('Submitting question via POST:', text);
-
-    // Step 1: Stop ongoing process
-    await handleStopSpeaking();
-
-    // Step 2: Reset stop flag
-    isStoppedRef.current = false; 
-
-    // Step 3: Setup state
-    addMessageToHistory('user', text);
-    setIsProcessing(true);
-    setIsSpeaking(false);
-    setErrorMessage('');
-    addMessageToHistory('ai', '', false); // Placeholder
-
-    // Abort controller setup
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
-    let accumulatedResponse = ''; // For display AND for single TTS request
-    let sseBuffer = ''; 
-
-    const processSseBuffer = (): void => {
-        const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop() || ''; 
-
-        for (const line of lines) {
-            if (isStoppedRef.current) break;
-            if (line.startsWith('data:')) {
-                const dataString = line.substring(5).trim();
-                if (dataString === '[DONE]') continue;
-                try {
-                    const data = JSON.parse(dataString);
-                    
-                    if (data.type === 'chunk' && data.content) {
-                        const contentChunk = data.content;
-                        // --- Simply accumulate ALL content --- 
-                        accumulatedResponse += contentChunk;
-                        if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
-                        // --- REMOVED two-chunk splitting logic --- 
-                        
-                    } else if (data.type === 'error') {
-                         if (!isStoppedRef.current) { 
-                             setErrorMessage(data.content || 'Stream error');
-                             setIsProcessing(false);
-                             setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
-                         }
-                         if (readerRef.current) readerRef.current.cancel('Stream error received').catch(()=>{});
-                         abortControllerRef.current?.abort();
-                         break;
-                    }
-                } catch (parseError) {
-                    if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
-                }
-            } else if (line.trim()) { // Log non-empty lines that don't start with 'data:'
-                 console.log("Non-data SSE Line Received:", line);
-            }
-        } // end for lines
-    }; // --- End processSseBuffer definition ---
+    let retryCount = 0;
+    const maxRetries = 2;
     
-    try {
-        const response = await fetch('/api/ask', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                question: text,
-                conversationHistory: conversationHistory
-            }),
-            signal: abortControllerRef.current.signal
-        });
-
-        if (isStoppedRef.current) return;
-        if (!response.ok) {
-            let errorMsg = `Error fetching stream: ${response.status}`;
-            try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch { /* ignore */ }
-            throw new Error(errorMsg);
+    const attemptSubmit = async (): Promise<void> => {
+      try {
+        // Ensure AudioContext is active
+        if (audioContextRef.current?.state === 'suspended') {
+          await audioContextRef.current.resume();
         }
-        if (!response.body) throw new Error('Response body is null');
+        
+        // If AudioContext is lost, recreate it
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        
+        // Rest of your existing handleQuestionSubmit logic...
+        if (!text || text.trim() === '') return;
+        console.log('Submitting question via POST:', text);
 
-        readerRef.current = response.body.getReader();
-        const decoder = new TextDecoder();
+        // Step 1: Stop ongoing process
+        await handleStopSpeaking();
 
-        // Stream reading loop
-        while (true) {
-            if (isStoppedRef.current) break;
-            try { // Inner try for reader.read()
-                const { done, value } = await readerRef.current!.read();
+        // Step 2: Reset stop flag
+        isStoppedRef.current = false; 
+
+        // Step 3: Setup state
+        addMessageToHistory('user', text);
+        setIsProcessing(true);
+        setIsSpeaking(false);
+        setErrorMessage('');
+        addMessageToHistory('ai', '', false); // Placeholder
+
+        // Abort controller setup
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+
+        let accumulatedResponse = ''; // For display AND for single TTS request
+        let sseBuffer = ''; 
+
+        const processSseBuffer = (): void => {
+            const lines = sseBuffer.split('\n');
+            sseBuffer = lines.pop() || ''; 
+
+            for (const line of lines) {
                 if (isStoppedRef.current) break;
-
-                if (done) {
-                    console.log('Fetch stream finished.');
-                    sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
-                    processSseBuffer(); // Process final buffer part
-
-                    // Add Final History Update
-                    if (!isStoppedRef.current && accumulatedResponse) {
-                         console.log('Updating history with final complete AI message.');
-                         addMessageToHistory('ai', accumulatedResponse, true); 
+                if (line.startsWith('data:')) {
+                    const dataString = line.substring(5).trim();
+                    if (dataString === '[DONE]') continue;
+                    try {
+                        const data = JSON.parse(dataString);
+                        
+                        if (data.type === 'chunk' && data.content) {
+                            const contentChunk = data.content;
+                            accumulatedResponse += contentChunk;
+                            if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
+                        } else if (data.type === 'error') {
+                             if (!isStoppedRef.current) { 
+                                 setErrorMessage(data.content || 'Stream error');
+                                 setIsProcessing(false);
+                                 setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+                             }
+                             if (readerRef.current) readerRef.current.cancel('Stream error received').catch(()=>{});
+                             abortControllerRef.current?.abort();
+                             break;
+                        }
+                    } catch (parseError) {
+                        if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
                     }
-
-                    // --- Send ENTIRE accumulated response for TTS --- 
-                    if (!isStoppedRef.current && accumulatedResponse.trim()) {
-                        console.log(`Stream done. Enqueueing full response (length: ${accumulatedResponse.length}) for TTS.`);
-                        enqueueTtsRequest(accumulatedResponse.trim());
-                    }
-                    // --- End send entire response --- 
-                    
-                    if (!isStoppedRef.current) setIsProcessing(false); 
-                    break; // Exit loop
+                } else if (line.trim()) { // Log non-empty lines that don't start with 'data:'
+                     console.log("Non-data SSE Line Received:", line);
                 }
-
-                // Add incoming data and process buffer
-                sseBuffer += decoder.decode(value, { stream: true });
-                processSseBuffer(); // Process buffer after adding data
-
-            } catch (streamReadError) { // Catch for reader.read()
-                 if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
-                     console.error('Error reading stream:', streamReadError);
-                     setErrorMessage('Connection lost during response.');
-                     setIsProcessing(false);
-                     setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
-                 } else {
-                     console.log('Stream reading aborted or stopped.');
-                 }
-                 break; // Exit loop on error or abort/stop
             }
-        } // end while
+        };
+        
+        try {
+            const response = await fetch('/api/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: text,
+                    conversationHistory: conversationHistory
+                }),
+                signal: abortControllerRef.current.signal
+            });
 
-        // Cleanup after loop finishes naturally or via break
-        readerRef.current = null;
-        if (!abortControllerRef.current?.signal.aborted && !isStoppedRef.current) {
-             abortControllerRef.current = null;
-        }
-        if (isStoppedRef.current) { // Ensure processing stops if loop was exited by stop flag
-            setIsProcessing(false);
-        }
+            if (isStoppedRef.current) return;
+            if (!response.ok) {
+                let errorMsg = `Error fetching stream: ${response.status}`;
+                try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch { /* ignore */ }
+                throw new Error(errorMsg);
+            }
+            if (!response.body) throw new Error('Response body is null');
 
-    } catch (error) { // Catch for fetch() or setup errors
-         if (!(error instanceof Error && error.name === 'AbortError') && !isStoppedRef.current) {
-             console.error('Failed to initiate fetch stream or response error:', error);
-             setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to the AI.');
-             setIsProcessing(false);
-             setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
-         } else {
-             console.log("Fetch initiation aborted or stopped.");
-             setIsProcessing(false);
-         }
-         abortControllerRef.current = null; // Clear controller on any outer error/abort
+            readerRef.current = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            // Stream reading loop
+            while (true) {
+                if (isStoppedRef.current) break;
+                try { // Inner try for reader.read()
+                    const { done, value } = await readerRef.current!.read();
+                    if (isStoppedRef.current) break;
+
+                    if (done) {
+                        console.log('Fetch stream finished.');
+                        sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
+                        processSseBuffer(); // Process final buffer part
+
+                        // Add Final History Update
+                        if (!isStoppedRef.current && accumulatedResponse) {
+                             console.log('Updating history with final complete AI message.');
+                             addMessageToHistory('ai', accumulatedResponse, true); 
+                        }
+
+                        // --- Send ENTIRE accumulated response for TTS --- 
+                        if (!isStoppedRef.current && accumulatedResponse.trim()) {
+                            console.log(`Stream done. Enqueueing full response (length: ${accumulatedResponse.length}) for TTS.`);
+                            enqueueTtsRequest(accumulatedResponse.trim());
+                        }
+                        // --- End send entire response --- 
+                        
+                        if (!isStoppedRef.current) setIsProcessing(false); 
+                        break; // Exit loop
+                    }
+
+                    // Add incoming data and process buffer
+                    sseBuffer += decoder.decode(value, { stream: true });
+                    processSseBuffer(); // Process buffer after adding data
+
+                } catch (streamReadError) { // Catch for reader.read()
+                     if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
+                         console.error('Error reading stream:', streamReadError);
+                         setErrorMessage('Connection lost during response.');
+                         setIsProcessing(false);
+                         setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+                     } else {
+                         console.log('Stream reading aborted or stopped.');
+                     }
+                     break; // Exit loop on error or abort/stop
+                }
+            } // end while
+
+            // Cleanup after loop finishes naturally or via break
+            readerRef.current = null;
+            if (!abortControllerRef.current?.signal.aborted && !isStoppedRef.current) {
+                 abortControllerRef.current = null;
+            }
+            if (isStoppedRef.current) { // Ensure processing stops if loop was exited by stop flag
+                setIsProcessing(false);
+            }
+
+        } catch (error) { // Catch for fetch() or setup errors
+             if (!(error instanceof Error && error.name === 'AbortError') && !isStoppedRef.current) {
+                 console.error('Failed to initiate fetch stream or response error:', error);
+                 setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to the AI.');
+                 setIsProcessing(false);
+                 setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+             } else {
+                 console.log("Fetch initiation aborted or stopped.");
+                 setIsProcessing(false);
+             }
+             abortControllerRef.current = null; // Clear controller on any outer error/abort
+        }
+        
+      } catch (error) {
+        console.error('Error in handleQuestionSubmit:', error);
+        
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying submission (attempt ${retryCount})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+          return attemptSubmit();
+        }
+        
+        throw error; // If all retries failed
+      }
+    };
+    
+    return attemptSubmit();
+  };
+
+  // Add connection health check
+  const checkConnectionHealth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/health', {
+        method: 'GET',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      
+      if (!response.ok) {
+        console.warn('Health check failed, reinitializing audio context...');
+        // Re-initialize audio context
+        if (audioContextRef.current) {
+          await audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        // Create new context on next user interaction
+      }
+    } catch (error) {
+      console.error('Health check failed:', error);
     }
+  }, []);
 
-  }; // --- End handleQuestionSubmit --- 
+  useEffect(() => {
+    const healthCheckInterval = setInterval(checkConnectionHealth, 60000); // Every minute
+    return () => clearInterval(healthCheckInterval);
+  }, [checkConnectionHealth]);
 
   return (
     <div className="container full-page-layout">
