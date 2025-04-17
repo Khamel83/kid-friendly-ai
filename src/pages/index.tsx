@@ -117,7 +117,7 @@ export default function Home() {
     }
   }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue (Updated with stop check) ---
+  // --- Process TTS Request Queue (Refined Playback Trigger) ---
   const processTtsQueue = useCallback(async () => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("TTS Queue: Stop requested, exiting.");
@@ -178,12 +178,16 @@ export default function Home() {
         if (isStoppedRef.current) return; // Check after decode
         
         console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
+        
+        // Add buffer to playback queue
         audioPlaybackQueueRef.current.push(audioBuffer);
         
-        // Trigger playback check if not already playing
-        if (!isPlayingAudioSegmentRef.current) {
-           playNextAudioChunk();
+        // --- Trigger playback ONLY if this is the first item added AND nothing is playing --- 
+        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+           console.log("First audio chunk received, starting playback chain.");
+           playNextAudioChunk(); 
         }
+        // --- End Refined Playback Trigger --- 
 
     } catch (error) {
         if (!isStoppedRef.current) { // Only log/set error if not manually stopped
@@ -197,14 +201,14 @@ export default function Home() {
         // Release lock and immediately check if more items are in the queue
         isProcessingTtsQueueRef.current = false;
         // Check queue again only if not stopped and queue has items
-        if (!isStoppedRef.current && ttsRequestQueueRef.current.length > 0) { // Check before scheduling next
+        if (!isStoppedRef.current && ttsRequestQueueRef.current.length > 0) {
            setTimeout(processTtsQueue, 0); 
         }
     }
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Play Next Audio Chunk from Queue (Updated with stop check) ---
+  // --- Play Next Audio Chunk from Queue (No change needed here, relies on onended) ---
   const playNextAudioChunk = useCallback(() => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("Playback Queue: Stop requested, exiting.");
@@ -247,17 +251,17 @@ export default function Home() {
         source.disconnect(); // Clean up node
         
         // Only clear ref if this specific source ended
-        if (currentAudioSourceRef.current === source) { 
+        if (currentAudioSourceRef.current === source) {
             currentAudioSourceRef.current = null;
         }
         
         isPlayingAudioSegmentRef.current = false; // Release playback lock
         
         // Check immediately if more chunks are ready AND not stopped
-        if (!isStoppedRef.current && audioPlaybackQueueRef.current.length > 0) { // Check before scheduling next
-           setTimeout(playNextAudioChunk, 0); 
+        if (!isStoppedRef.current && audioPlaybackQueueRef.current.length > 0) {
+           setTimeout(playNextAudioChunk, 0); // <<< This continues the chain
         } else if (!isStoppedRef.current) {
-            // No more chunks and not stopped, check if TTS might still be processing
+            // No more chunks, check if TTS is still processing before setting isSpeaking=false
             if (!isProcessingTtsQueueRef.current) {
                setIsSpeaking(false);
             }
