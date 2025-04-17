@@ -7,11 +7,24 @@ interface Message {
   text: string;
 }
 
+const SESSION_STORAGE_KEY = 'kidFriendlyAiHistory';
+
 export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Loading AI response
   const [isSpeaking, setIsSpeaking] = useState(false); // AI is speaking
-  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<Message[]>(() => {
+    if (typeof window === 'undefined') {
+      return []; // Return empty array during SSR
+    }
+    try {
+      const storedHistory = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      return storedHistory ? JSON.parse(storedHistory) : [];
+    } catch (error) {
+      console.error('Error reading conversation history from sessionStorage:', error);
+      return [];
+    }
+  });
   const [errorMessage, setErrorMessage] = useState('');
   
   // Refs for audio playback
@@ -44,6 +57,23 @@ export default function Home() {
       // }
     };
   }, []);
+
+  // --- Save history to sessionStorage on change --- 
+  useEffect(() => {
+    try {
+      // Avoid saving the initial empty array if loading failed
+      if (conversationHistory.length > 0) { 
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(conversationHistory));
+      }
+      // Optional: Clear storage if history becomes empty (e.g., via a Clear button later)
+      // else {
+      //   sessionStorage.removeItem(SESSION_STORAGE_KEY);
+      // }
+    } catch (error) {
+      console.error('Error saving conversation history to sessionStorage:', error);
+    }
+  }, [conversationHistory]);
+  // --- End Save history --- 
 
   // Function to add a message to the history
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
