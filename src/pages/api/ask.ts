@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createSystemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
+import { systemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
 // Removed OpenAI import as it's no longer used here for chat
 // import OpenAI from 'openai'; 
 
@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // --- Format LLM messages with history ---
         const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-          { role: 'system', content: createSystemPrompt() }
+          { role: 'system', content: systemPrompt }
         ];
 
         if (conversationHistory && conversationHistory.length > 0) {
