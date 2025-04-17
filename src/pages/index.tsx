@@ -13,18 +13,7 @@ export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Loading AI response
   const [isSpeaking, setIsSpeaking] = useState(false); // AI is speaking
-  const [conversationHistory, setConversationHistory] = useState<Message[]>(() => {
-    if (typeof window === 'undefined') {
-      return []; // Return empty array during SSR
-    }
-    try {
-      const storedHistory = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      return storedHistory ? JSON.parse(storedHistory) : [];
-    } catch (error) {
-      console.error('Error reading conversation history from sessionStorage:', error);
-      return [];
-    }
-  });
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
   const [currentAiResponse, setCurrentAiResponse] = useState(''); // State for streaming response
   
@@ -32,9 +21,9 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Initialize AudioContext on mount
+  // Initialize AudioContext & Load History AFTER mount
   useEffect(() => {
-    // Ensure AudioContext is created only once and in the browser
+    // --- Audio Context Init --- 
     if (typeof window !== 'undefined' && !audioContextRef.current) {
        try {
          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -44,37 +33,45 @@ export default function Home() {
          setErrorMessage('Web Audio API is not available in this browser.');
        }
     }
+    // --- End Audio Context Init --- 
     
-    // Cleanup audio source on unmount
+    // --- Load history from sessionStorage ONCE on client mount --- 
+    try {
+      const storedHistory = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (storedHistory) {
+        setConversationHistory(JSON.parse(storedHistory));
+        console.log('Loaded conversation history from sessionStorage.');
+      }
+    } catch (error) {
+      console.error('Error reading conversation history from sessionStorage:', error);
+      // Keep the initial empty state if loading fails
+    }
+    // --- End Load history --- 
+    
+    // Cleanup audio source on unmount (keep this)
     return () => {
       if (sourceNodeRef.current) {
         sourceNodeRef.current.stop();
         sourceNodeRef.current.disconnect();
         sourceNodeRef.current = null;
       }
-      // Optionally close the context, or keep it alive for reuse
-      // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      //   audioContextRef.current.close();
-      // }
     };
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once after mount
 
-  // --- Save history to sessionStorage on change --- 
+  // Save history to sessionStorage on change (keep this)
   useEffect(() => {
     try {
-      // Avoid saving the initial empty array if loading failed
+      // Only save if history is not the initial empty array
       if (conversationHistory.length > 0) { 
         sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(conversationHistory));
+      } else {
+        // Clear storage if history becomes empty
+         sessionStorage.removeItem(SESSION_STORAGE_KEY);
       }
-      // Optional: Clear storage if history becomes empty (e.g., via a Clear button later)
-      // else {
-      //   sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      // }
     } catch (error) {
       console.error('Error saving conversation history to sessionStorage:', error);
     }
   }, [conversationHistory]);
-  // --- End Save history --- 
 
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
     // --- Modify to handle partial AI message update ---
