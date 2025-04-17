@@ -295,21 +295,40 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       
       // Create nodes
       sourceNodeRef.current = audioContext.createMediaStreamSource(stream);
-      processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
-
-      const processor = processorRef.current;
-      const source = sourceNodeRef.current;
       
-      processor.onaudioprocess = (e) => {
-        if (isListeningRef.current) { 
-          const inputData = e.inputBuffer.getChannelData(0);
-          audioChunksRef.current.push(new Float32Array(inputData));
-        }
-      };
+      // Create an AudioWorkletNode for processing
+      try {
+        // Register the worklet processor
+        await audioContext.audioWorklet.addModule('/audio-processor.js');
+        processorRef.current = new AudioWorkletNode(audioContext, 'audio-processor', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          processorOptions: {
+            sampleRate: 16000
+          }
+        });
+        
+        // Handle messages from the worklet
+        processorRef.current.port.onmessage = (event) => {
+          if (isListeningRef.current) {
+            audioChunksRef.current.push(new Float32Array(event.data));
+          }
+        };
+      } catch (err) {
+        console.warn('AudioWorklet not supported, falling back to ScriptProcessorNode');
+        // Fallback to ScriptProcessorNode if AudioWorklet is not supported
+        processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
+        processorRef.current.onaudioprocess = (e) => {
+          if (isListeningRef.current) {
+            const inputData = e.inputBuffer.getChannelData(0);
+            audioChunksRef.current.push(new Float32Array(inputData));
+          }
+        };
+      }
       
       // Connect the nodes
-      source.connect(processor);
-      processor.connect(audioContext.destination);
+      sourceNodeRef.current.connect(processorRef.current);
+      processorRef.current.connect(audioContext.destination);
       
       console.log("Audio nodes connected, starting recording...");
       setIsListening(true);

@@ -59,6 +59,48 @@ export default async function handler(
       filename
     });
 
+    // Validate the WAV header
+    if (audioData.length < 44) {
+      throw new Error('Invalid WAV file: too small');
+    }
+
+    // Check WAV header
+    const header = audioData.slice(0, 44);
+    const view = new DataView(header.buffer);
+    
+    // Check RIFF header
+    if (view.getUint32(0, true) !== 0x46464952) { // "RIFF"
+      throw new Error('Invalid WAV file: missing RIFF header');
+    }
+    
+    // Check WAVE format
+    if (view.getUint32(8, true) !== 0x45564157) { // "WAVE"
+      throw new Error('Invalid WAV file: missing WAVE format');
+    }
+    
+    // Check format type (should be PCM)
+    if (view.getUint16(20, true) !== 1) {
+      throw new Error('Invalid WAV file: not PCM format');
+    }
+    
+    // Check sample rate (should be 16kHz)
+    const sampleRate = view.getUint32(24, true);
+    if (sampleRate !== 16000) {
+      throw new Error(`Invalid sample rate: ${sampleRate}Hz (expected 16000Hz)`);
+    }
+    
+    // Check number of channels (should be mono)
+    const numChannels = view.getUint16(22, true);
+    if (numChannels !== 1) {
+      throw new Error(`Invalid number of channels: ${numChannels} (expected 1)`);
+    }
+    
+    // Check bit depth (should be 16-bit)
+    const bitDepth = view.getUint16(34, true);
+    if (bitDepth !== 16) {
+      throw new Error(`Invalid bit depth: ${bitDepth} (expected 16)`);
+    }
+
     // Create a temporary file with WAV format
     const file = new File([audioData], filename, { 
       type: 'audio/wav'
