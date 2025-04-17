@@ -34,7 +34,7 @@ export default async function handler(
     }
 
     // Parse the multipart form data
-    const parts = buffer.toString().split(`--${boundary}`);
+    const parts = buffer.toString('binary').split(`--${boundary}`);
     let audioData: Buffer | null = null;
     let filename = '';
 
@@ -45,7 +45,15 @@ export default async function handler(
           filename = match[1];
           const dataStart = part.indexOf('\r\n\r\n') + 4;
           const dataEnd = part.lastIndexOf('\r\n');
-          audioData = Buffer.from(part.slice(dataStart, dataEnd));
+          const rawData = part.slice(dataStart, dataEnd);
+          audioData = Buffer.from(rawData, 'binary');
+          
+          // Log the first few bytes of the audio data
+          console.log('Raw audio data:', {
+            size: audioData.length,
+            firstBytes: audioData.slice(0, 8).toString('hex'),
+            lastBytes: audioData.slice(-8).toString('hex')
+          });
         }
       }
     }
@@ -53,11 +61,6 @@ export default async function handler(
     if (!audioData) {
       throw new Error('No audio data found in request');
     }
-
-    console.log('Received audio data:', {
-      size: audioData.length,
-      filename
-    });
 
     // Validate the WAV header
     if (audioData.length < 44) {
@@ -67,6 +70,16 @@ export default async function handler(
     // Check WAV header
     const header = audioData.slice(0, 44);
     const view = new DataView(header.buffer);
+    
+    // Log the header bytes for debugging
+    console.log('WAV header bytes:', {
+      riff: view.getUint32(0, true).toString(16),
+      wave: view.getUint32(8, true).toString(16),
+      format: view.getUint16(20, true),
+      channels: view.getUint16(22, true),
+      sampleRate: view.getUint32(24, true),
+      bitDepth: view.getUint16(34, true)
+    });
     
     // Check RIFF header
     if (view.getUint32(0, true) !== 0x46464952) { // "RIFF"
@@ -109,7 +122,8 @@ export default async function handler(
     console.log('Created File object:', {
       size: file.size,
       type: file.type,
-      name: file.name
+      name: file.name,
+      firstBytes: audioData.slice(0, 8).toString('hex')
     });
 
     // Send to OpenAI

@@ -138,7 +138,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       numChannels,
       bitDepth,
       duration: targetLength / sampleRate,
-      size: wavBlob.size
+      size: wavBlob.size,
+      headerSize: wavHeader.byteLength,
+      dataSize: pcmData.buffer.byteLength
     });
     
     return wavBlob;
