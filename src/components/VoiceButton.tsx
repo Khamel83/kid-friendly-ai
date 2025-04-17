@@ -52,9 +52,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   // Convert to WAV function (wrapped in useCallback)
   const convertToWav = useCallback((chunks: Float32Array[]): Blob => {
-    const sampleRate = 44100;
-    const numChannels = 1;
-    const bitDepth = 16;
+    const sampleRate = 16000; // Whisper requires 16kHz
+    const numChannels = 1; // Mono audio
+    const bitDepth = 16; // 16-bit PCM
     const format = 1; // PCM
     
     // Calculate total length
@@ -66,6 +66,26 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     if (totalLength === 0) {
         console.error("Cannot convert to WAV: No audio data provided.");
         return new Blob([new ArrayBuffer(44)], { type: 'audio/wav' }); 
+    }
+
+    // Ensure audio length is optimal for Whisper (pad or trim to 30 seconds)
+    const targetLength = 30 * sampleRate; // 30 seconds at 16kHz
+    const audioData = new Float32Array(targetLength);
+    let offset = 0;
+    
+    // Copy and pad/trim audio data
+    for (const chunk of chunks) {
+      const remainingSpace = targetLength - offset;
+      if (remainingSpace <= 0) break;
+      
+      const copyLength = Math.min(chunk.length, remainingSpace);
+      audioData.set(chunk.slice(0, copyLength), offset);
+      offset += copyLength;
+    }
+    
+    // If we didn't fill the buffer, pad with silence
+    if (offset < targetLength) {
+      audioData.fill(0, offset);
     }
     
     const bytesPerSample = bitDepth / 8;
@@ -79,7 +99,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     // Write WAV header
     // RIFF chunk descriptor
     view.setUint32(0, 0x46464952, true); // "RIFF"
-    view.setUint32(4, 36 + totalLength * bytesPerSample, true); // file length
+    view.setUint32(4, 36 + targetLength * bytesPerSample, true); // file length
     view.setUint32(8, 0x45564157, true); // "WAVE"
     
     // fmt sub-chunk
@@ -94,20 +114,25 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     
     // data sub-chunk
     view.setUint32(36, 0x61746164, true); // "data"
-    view.setUint32(40, totalLength * bytesPerSample, true); // data length
+    view.setUint32(40, targetLength * bytesPerSample, true); // data length
     
     // Convert Float32 data to 16-bit PCM
-    const pcmData = new Int16Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      for (let i = 0; i < chunk.length; i++) {
-        const s = Math.max(-1, Math.min(1, chunk[i]));
-        pcmData[offset++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
+    const pcmData = new Int16Array(targetLength);
+    for (let i = 0; i < targetLength; i++) {
+      const s = Math.max(-1, Math.min(1, audioData[i]));
+      pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
     }
     
     // Combine header and PCM data
     const wavBlob = new Blob([wavHeader, pcmData.buffer], { type: 'audio/wav' });
+    
+    console.log('Generated WAV file:', {
+      sampleRate,
+      numChannels,
+      bitDepth,
+      duration: targetLength / sampleRate,
+      size: wavBlob.size
+    });
     
     return wavBlob;
   }, []);
@@ -237,72 +262,75 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       setError(null);
       audioChunksRef.current = []; // Reset chunks
       
+      // Check if we can get user media
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser');
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100, 
-          channelCount: 1
+          sampleRate: 16000, // Whisper requires 16kHz
+          channelCount: 1, // Mono audio
+          autoGainControl: true
         }
       });
+      
       streamRef.current = stream;
       
       // Create audio context if it doesn't exist or is closed
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-         // Ensure any previous context is properly closed before creating a new one
-         if (audioContextRef.current) {
-             await audioContextRef.current.close();
-         }
-        audioContextRef.current = new AudioContext({ sampleRate: 44100 }); // Specify sample rate
-        console.log('AudioContext created or reused.');
+        if (audioContextRef.current) {
+          await audioContextRef.current.close();
+        }
+        audioContextRef.current = new AudioContext({ 
+          sampleRate: 16000, // Whisper requires 16kHz
+          latencyHint: 'interactive'
+        });
+        console.log('AudioContext created with sample rate:', audioContextRef.current.sampleRate);
       }
+      
       const audioContext = audioContextRef.current;
       
       // Create nodes
       sourceNodeRef.current = audioContext.createMediaStreamSource(stream);
-      // Buffer size recommendation: power of 2, e.g., 4096. Larger buffer = more latency, smaller = more CPU
       processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
 
       const processor = processorRef.current;
       const source = sourceNodeRef.current;
       
       processor.onaudioprocess = (e) => {
-        // Use the ref to check listening state reliably
         if (isListeningRef.current) { 
-          // Get a copy of the input buffer data
           const inputData = e.inputBuffer.getChannelData(0);
-          // Store a copy, not the original buffer
-          audioChunksRef.current.push(new Float32Array(inputData)); 
-        } else {
-           // Optional: Log if process event fires while not listening, might indicate cleanup issue
-           // console.log("onaudioprocess fired while not listening.");
+          audioChunksRef.current.push(new Float32Array(inputData));
         }
       };
       
-      // Connect the nodes: source -> processor -> destination
+      // Connect the nodes
       source.connect(processor);
-      // It's important to connect the processor to the destination to keep the audio graph alive
-      // even if you don't want to hear the live audio.
-      processor.connect(audioContext.destination); 
+      processor.connect(audioContext.destination);
       
-      console.log("Audio nodes connected, starting listening state.");
-      setIsListening(true); // Update state -> triggers useEffect -> updates isListeningRef
+      console.log("Audio nodes connected, starting recording...");
+      setIsListening(true);
       
     } catch (err) {
       console.error('Error starting recording:', err);
-      let message = 'Failed to start recording. Check mic permissions & use Chrome.';
+      let message = 'Failed to start recording. Please check your microphone and browser settings.';
+      
       if (err instanceof Error) {
-          if (err.name === 'NotAllowedError' || err.message.includes('permission denied')) {
-              message = 'Microphone permission denied. Please allow access.';
-          } else if (err.name === 'NotFoundError' || err.message.includes('not found')) {
-              message = 'No microphone found. Please ensure it is connected.';
-          } else if (err.message.includes('sampleRate')) {
-              message = 'Could not set desired audio sample rate (44.1kHz). Try a different mic or browser.';
-          }
+        if (err.name === 'NotAllowedError' || err.message.includes('permission denied')) {
+          message = 'Microphone permission denied. Please allow access to your microphone.';
+        } else if (err.name === 'NotFoundError' || err.message.includes('not found')) {
+          message = 'No microphone found. Please ensure your microphone is connected.';
+        } else if (err.message.includes('sampleRate')) {
+          message = 'Could not set 16kHz sample rate. Please try a different microphone or browser.';
+        }
       }
+      
       setError(message);
       setIsListening(false);
-      cleanupAudioResources(); // Ensure cleanup on error
+      cleanupAudioResources();
     }
   };
 
