@@ -192,6 +192,7 @@ export default function Home() {
           <div className="chat-history">
             {conversationHistory.map((msg, index) => (
               <div key={index} className={`chat-message ${msg.type}`}>
+                <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
                 <p>{msg.text}</p>
               </div>
             ))}

@@ -76,8 +76,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error in /api/tts:', error);
     // Check if the error is from OpenAI API
     if (error instanceof OpenAI.APIError) {
-         console.error('OpenAI API Error:', { status: error.status, message: error.message });
+         // Log more details from the OpenAI error object
+         console.error('OpenAI API Error Details:', {
+             status: error.status,
+             message: error.message,
+             code: error.code,
+             type: error.type,
+             // param: error.param, // param might not always exist
+             headers: JSON.stringify(error.headers) // Stringify headers for logging
+         });
          return res.status(error.status || 500).json({ error: `OpenAI Error: ${error.message}` });
+    } else if (error instanceof Error) {
+        // Log stack trace for generic errors
+        console.error('Generic Error Stack Trace in /api/tts:', error.stack);
     }
     return res.status(500).json({ error: 'Failed to generate speech' });
   }
