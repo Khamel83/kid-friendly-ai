@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       voice: "shimmer", // Choose a friendly voice (alloy, echo, fable, onyx, nova, shimmer)
       input: text,
       response_format: "mp3", // Other options: opus, aac, flac
-      speed: 0.95 // Adjust speed slightly if needed (0.25 to 4.0)
+      speed: 1.0 // Setting speed to default
     });
 
     console.log('TTS stream generated successfully.');

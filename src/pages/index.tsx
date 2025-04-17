@@ -1,25 +1,37 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import VoiceButton from '../components/VoiceButton';
+import { Buffer } from 'buffer'; // Needed for sentence detection buffer
 
 interface Message {
   type: 'user' | 'ai';
   text: string;
 }
 
+// Simple sentence end detection (can be improved)
+const SENTENCE_END_REGEX = /([.?!])\s+/;
+
 const SESSION_STORAGE_KEY = 'kidFriendlyAiHistory';
 
 export default function Home() {
-  const [isListening, setIsListening] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Loading AI response
-  const [isSpeaking, setIsSpeaking] = useState(false); // AI is speaking
+  // Core States
+  const [isListening, setIsListening] = useState(false); // Mic is recording
+  const [isProcessing, setIsProcessing] = useState(false); // Waiting for AI text stream start/end OR TTS audio
+  const [isSpeaking, setIsSpeaking] = useState(false); // Audio is queued or playing
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [currentAiResponse, setCurrentAiResponse] = useState(''); // State for streaming response
-  
-  // Refs for audio playback
+
+  // Streaming & Queuing States
+  const ttsRequestQueueRef = useRef<string[]>([]); // Queue of sentences needing TTS
+  const audioPlaybackQueueRef = useRef<AudioBuffer[]>([]); // Queue of decoded audio buffers ready to play
+  const isProcessingTtsQueueRef = useRef(false); // Lock to prevent parallel TTS processing
+  const isPlayingAudioSegmentRef = useRef(false); // Lock for current audio segment playback
+
+  // Refs
   const audioContextRef = useRef<AudioContext | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null); // Ref for the currently playing audio source
+  const sentenceBufferRef = useRef(''); // Buffer for incoming text chunks to form sentences
+  const eventSourceRef = useRef<EventSource | null>(null); // Ref to manage EventSource connection
 
   // --- REMOVE SessionStorage Loading Effect --- 
   // useEffect(() => { ... load logic ... }, []);
@@ -36,168 +48,309 @@ export default function Home() {
          setErrorMessage('Web Audio API is not available in this browser.');
        }
     }
+    // No cleanup needed for AudioContext itself generally
+    // Cleanup for audio source nodes happens in stop functions
+    
+    // Ensure EventSource is closed on unmount if active
     return () => {
-      if (sourceNodeRef.current) {
-         sourceNodeRef.current.stop();
-         sourceNodeRef.current.disconnect();
-         sourceNodeRef.current = null;
-      }
+        if (eventSourceRef.current) {
+            console.log("Closing EventSource on unmount.");
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
     };
-  }, []); // Now only handles AudioContext and cleanup
+  }, []);
   // --- End Initialize AudioContext --- 
 
   // --- REMOVE SessionStorage Saving Effect --- 
   // useEffect(() => { ... save logic ... }, [conversationHistory]);
   // --- End REMOVE --- 
 
-  const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
-    // --- Modify to handle partial AI message update ---
+  const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string, isComplete: boolean = true) => {
     setConversationHistory(prev => {
-      // If the last message was AI and we are adding AI, update it
-      if (type === 'ai' && prev.length > 0 && prev[prev.length - 1].type === 'ai') {
-        const updatedHistory = [...prev];
-        updatedHistory[updatedHistory.length - 1].text = text;
-        return updatedHistory;
+      // If adding AI text and the last message is also AI (and not marked complete yet?), update it
+      if (type === 'ai' && prev.length > 0 && prev[prev.length - 1].type === 'ai' && !isComplete) {
+         // Check if the last AI message placeholder is empty, if so replace it, otherwise update.
+         // This handles the initial placeholder addition vs subsequent updates.
+         const lastMsg = prev[prev.length - 1];
+         if (lastMsg.text === '') { // Replace empty placeholder
+            return [...prev.slice(0, -1), { type, text }];
+         } else { // Update existing text
+             const updatedHistory = [...prev];
+             updatedHistory[updatedHistory.length - 1].text = text;
+             return updatedHistory;
+         }
       }
-      // Otherwise, add a new message
+      // Otherwise, add a new message entry
       return [...prev, { type, text }];
     });
-    // --- End Modify --- 
   }, []);
 
-  const handleQuestionSubmit = async (text: string) => {
+  // --- Function to add sentence to TTS Queue and trigger processing ---
+  const enqueueTtsRequest = useCallback((sentence: string) => {
+    if (sentence.trim()) {
+      console.log(`Enqueueing TTS for: "${sentence.trim().substring(0,30)}..."`);
+      ttsRequestQueueRef.current.push(sentence.trim());
+      // Start processing if not already running
+      if (!isProcessingTtsQueueRef.current) {
+          processTtsQueue();
+      }
+    }
+  }, []); // No dependencies needed as it uses refs and calls another function
+
+  // --- Process TTS Request Queue ---
+  const processTtsQueue = useCallback(async () => {
+     if (isProcessingTtsQueueRef.current || ttsRequestQueueRef.current.length === 0) {
+         isProcessingTtsQueueRef.current = false; // Ensure lock is released if queue empty
+         return; // Already processing or queue is empty
+     }
+
+     isProcessingTtsQueueRef.current = true; // Acquire lock
+     setErrorMessage(''); // Clear errors when starting new TTS processing
+
+     const sentenceToProcess = ttsRequestQueueRef.current.shift(); // Get next sentence
+
+     if (!sentenceToProcess) {
+         isProcessingTtsQueueRef.current = false; // Release lock if somehow sentence is undefined
+         return;
+     }
+
+     console.log(`Processing TTS for: "${sentenceToProcess.substring(0,30)}..."`);
+     setIsSpeaking(true); // Indicate that we are actively trying to generate/queue speech
+
+     try {
+         const response = await fetch('/api/tts', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ text: sentenceToProcess }),
+         });
+
+         if (!response.ok || !response.body) {
+             let errorMsg = `TTS Error ${response.status}`;
+             try {
+                 const errorData = await response.json();
+                 errorMsg = errorData.error || errorMsg;
+             } catch { /* Ignore JSON parse error */ }
+             throw new Error(errorMsg);
+         }
+
+         const audioData = await response.arrayBuffer();
+         console.log(`TTS audio data length for sentence: ${audioData.byteLength}`);
+
+         if (!audioContextRef.current) throw new Error("AudioContext lost");
+         
+         // Resume context if needed
+         if (audioContextRef.current.state === 'suspended') {
+             await audioContextRef.current.resume();
+         }
+
+         const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+         console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
+         
+         // Add buffer to playback queue
+         audioPlaybackQueueRef.current.push(audioBuffer);
+         
+         // Trigger playback check if not already playing
+         if (!isPlayingAudioSegmentRef.current) {
+            playNextAudioChunk();
+         }
+
+     } catch (error) {
+         console.error('Error fetching or decoding TTS audio:', error);
+         const message = error instanceof Error ? error.message : 'Failed to get audio for a sentence.';
+         setErrorMessage(message);
+         // Don't clear the whole speaking state on a single sentence failure
+         // Maybe add sentence back to queue? Or just drop it? For now, drop it.
+     } finally {
+         // Release lock and immediately check if more items are in the queue
+         isProcessingTtsQueueRef.current = false;
+         // Check queue again asynchronously to allow state updates
+         setTimeout(processTtsQueue, 0); 
+     }
+  }, []); // Dependencies: Needs access to state setters if used directly
+
+
+  // --- Play Next Audio Chunk from Queue ---
+  const playNextAudioChunk = useCallback(() => {
+      if (isPlayingAudioSegmentRef.current || audioPlaybackQueueRef.current.length === 0 || !audioContextRef.current) {
+          // If nothing to play and queue empty, ensure speaking state is false
+          if(audioPlaybackQueueRef.current.length === 0 && !isPlayingAudioSegmentRef.current) {
+             setIsSpeaking(false);
+          }
+          return; // Already playing, queue empty, or context lost
+      }
+
+      isPlayingAudioSegmentRef.current = true; // Acquire playback lock
+      setIsSpeaking(true); // Overall system is speaking
+
+      const audioBufferToPlay = audioPlaybackQueueRef.current.shift(); // Get next buffer
+
+      if (!audioBufferToPlay) {
+          isPlayingAudioSegmentRef.current = false; // Release lock if buffer somehow undefined
+          setIsSpeaking(false); // No buffer, not speaking
+          return;
+      }
+
+      console.log("Starting playback of next audio chunk...");
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBufferToPlay;
+      source.connect(audioContextRef.current.destination);
+      
+      // Store ref to current source for potential stop action
+      currentAudioSourceRef.current = source;
+
+      source.onended = () => {
+          console.log("Audio chunk playback finished.");
+          source.disconnect(); // Clean up node
+          
+          // Only clear ref if this specific source ended
+          if (currentAudioSourceRef.current === source) { 
+              currentAudioSourceRef.current = null;
+          }
+          
+          isPlayingAudioSegmentRef.current = false; // Release playback lock
+          
+          // Check immediately if more chunks are ready to play
+          setTimeout(playNextAudioChunk, 0); 
+      };
+
+      source.start();
+
+  }, []); // Dependencies: Needs access to state setters if used directly
+
+
+  // --- Handle Text Stream from /api/ask ---
+  const handleQuestionSubmit = (text: string) => { // Make synchronous
     if (!text || text.trim() === '') return;
     
     console.log('Submitting question:', text);
-    addMessageToHistory('user', text);
-    setIsLoading(true);
-    setErrorMessage('');
-    setCurrentAiResponse(''); // Clear previous partial response
-    addMessageToHistory('ai', ''); // Add placeholder for AI response
+    // Stop any currently playing audio first
+    handleStopSpeaking(); 
     
-    // --- Use EventSource for Streaming --- 
-    const eventSource = new EventSource(`/api/ask?question=${encodeURIComponent(text)}`); // Send question via query param
+    addMessageToHistory('user', text);
+    setIsProcessing(true); // Indicate processing starts (text streaming)
+    setErrorMessage('');
+    sentenceBufferRef.current = ''; // Clear sentence buffer
+    ttsRequestQueueRef.current = []; // Clear TTS queue
+    audioPlaybackQueueRef.current = []; // Clear audio queue
+    
+    // Add placeholder for AI response - it will be updated
+    addMessageToHistory('ai', '', false); 
+
+    // Close previous EventSource if it exists
+    if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+    }
+
+    const newEventSource = new EventSource(`/api/ask?question=${encodeURIComponent(text)}`);
+    eventSourceRef.current = newEventSource; // Store ref
+
     let accumulatedResponse = '';
 
-    eventSource.onmessage = (event) => {
+    newEventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         
         if (data.type === 'chunk') {
           accumulatedResponse += data.content;
-          setCurrentAiResponse(accumulatedResponse); // Update intermediate state
-          addMessageToHistory('ai', accumulatedResponse); // Update history progressively
+          sentenceBufferRef.current += data.content;
+          // Update the displayed text progressively
+          addMessageToHistory('ai', accumulatedResponse, false); 
+
+          // Check for sentences in the buffer
+          const sentences = sentenceBufferRef.current.split(SENTENCE_END_REGEX);
+          
+          // If split results in more than one part, means we found sentence ends
+          if (sentences.length > 1) {
+            // Queue all complete sentences (parts before the last potential fragment)
+            for (let i = 0; i < sentences.length - 1; i++) {
+                // Re-add the delimiter if it exists and wasn't just whitespace
+                const sentence = sentences[i].trim();
+                const delimiter = sentences[i+1]?.match(/^s*([.?!])\s*/)?.[1]; // Find delimiter captured by regex if exists
+                if (sentence) {
+                    enqueueTtsRequest(sentence + (delimiter || '')); 
+                }
+                 // Increment i again because the delimiter was part of the next "sentence" from split
+                 i++; 
+            }
+            // The last part is the remaining buffer
+            sentenceBufferRef.current = sentences[sentences.length - 1];
+          }
+          
         } else if (data.type === 'done') {
           console.log('SSE stream finished.');
-          eventSource.close();
-          setIsLoading(false);
-          // Trigger TTS with the final accumulated response
-          playAiAudio(accumulatedResponse);
+          // Queue any remaining text in the buffer as the last sentence
+          enqueueTtsRequest(sentenceBufferRef.current); 
+          sentenceBufferRef.current = ''; // Clear buffer
+          
+          newEventSource.close();
+          eventSourceRef.current = null;
+          setIsProcessing(false); // Text streaming is done
+          // Mark the final AI message as complete (optional, depends on UI needs)
+          // addMessageToHistory('ai', accumulatedResponse, true); 
+          
         } else if (data.type === 'error') {
           console.error('SSE stream error:', data.content);
           setErrorMessage(data.content || 'An error occurred during streaming.');
-          eventSource.close();
-          setIsLoading(false);
-           // Remove the empty AI placeholder message on error
-          setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+          newEventSource.close();
+          eventSourceRef.current = null;
+          setIsProcessing(false);
+          setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
         }
       } catch (error) {
         console.error('Error parsing SSE message:', error);
         setErrorMessage('Error processing AI response.');
-        eventSource.close();
-        setIsLoading(false);
-        // Remove the empty AI placeholder message on error
-        setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+        newEventSource.close();
+        eventSourceRef.current = null;
+        setIsProcessing(false);
+        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
       }
     };
 
-    eventSource.onerror = (error) => {
+    newEventSource.onerror = (error) => {
       console.error('EventSource failed:', error);
-      setErrorMessage('Connection to AI failed. Please try again.');
-      eventSource.close();
-      setIsLoading(false);
-      // Remove the empty AI placeholder message on error
-      setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+       // Avoid setting error if it was intentionally closed
+      if (eventSourceRef.current) { 
+         setErrorMessage('Connection to AI failed. Please try again.');
+         eventSourceRef.current.close();
+         eventSourceRef.current = null;
+         setIsProcessing(false);
+         setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
+      }
     };
-    // --- End EventSource Logic ---
   };
 
-  const playAiAudio = async (text: string) => {
-    if (!text || !audioContextRef.current) return;
-
-    // Stop any currently playing audio
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.stop();
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
-    }
-
-    setIsSpeaking(true);
-    setErrorMessage(''); // Clear previous errors
-
-    try {
-      console.log('Requesting TTS audio for:', text.substring(0,50)+"...");
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok || !response.body) {
-         let errorMsg = `TTS API Error: ${response.status} ${response.statusText}`;
-          try {
-              const errorData = await response.json();
-              errorMsg = errorData.error || errorMsg;
-          } catch (jsonError) {
-              console.error('Failed to parse TTS error JSON', jsonError);
-          }
-         throw new Error(errorMsg);
-      }
-
-      console.log('Received TTS audio stream.');
-      const audioData = await response.arrayBuffer();
-      console.log('TTS audio data length:', audioData.byteLength);
-
-      if (!audioContextRef.current) {
-         throw new Error("AudioContext is not available");
-      }
-      
-      // Ensure context is running (might be suspended on page load)
-      if (audioContextRef.current.state === 'suspended') {
-          await audioContextRef.current.resume();
-      }
-      
-      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-      console.log('Decoded audio buffer duration:', audioBuffer.duration);
-
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContextRef.current.destination);
-      source.onended = () => {
-        console.log('OpenAI TTS playback finished.');
-        setIsSpeaking(false);
-        source.disconnect();
-        sourceNodeRef.current = null;
-      };
-      source.start();
-      sourceNodeRef.current = source; // Store reference to the playing source
-
-    } catch (error) {
-      console.error('Error playing AI audio:', error);
-      const message = error instanceof Error ? error.message : 'Failed to play audio response.';
-      setErrorMessage(message);
-      setIsSpeaking(false); // Ensure speaking state is reset on error
-    }
-  };
-
-  // Function to stop audio playback manually (optional)
+  // --- Stop Speaking Handler (Updated) ---
   const handleStopSpeaking = useCallback(() => {
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.stop(); // This triggers the onended event
+    console.log("Stop speaking requested.");
+    // Close EventSource if text is still streaming
+     if (eventSourceRef.current) {
+        console.log("Closing active EventSource.");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+        setIsProcessing(false); // Stop processing state
+     }
+     
+    // Clear the queues
+    ttsRequestQueueRef.current = [];
+    audioPlaybackQueueRef.current = [];
+    sentenceBufferRef.current = ''; // Clear any buffered text
+    
+    // Stop the currently playing audio node, if any
+    if (currentAudioSourceRef.current) {
+      console.log("Stopping current audio source node.");
+      currentAudioSourceRef.current.onended = null; // Prevent onended logic from re-triggering playback
+      currentAudioSourceRef.current.stop();
+      currentAudioSourceRef.current.disconnect();
+      currentAudioSourceRef.current = null;
     }
-  }, []);
+    
+    // Reset states
+    isPlayingAudioSegmentRef.current = false;
+    isProcessingTtsQueueRef.current = false; // Release TTS processing lock
+    setIsSpeaking(false); // Update global speaking state
+
+  }, []); // No dependencies needed
 
   return (
     <div className="container full-page-layout">
@@ -224,10 +377,11 @@ export default function Home() {
           <button 
               className="control-button stop-speaking-button" 
               onClick={handleStopSpeaking}
-              disabled={!isSpeaking} // Only enable when speaking
-              aria-label="Stop Speaking"
+              // Disable if not processing text OR speaking audio
+              disabled={!isProcessing && !isSpeaking} 
+              aria-label="Stop" 
           >
-              Stop Speaking
+              Stop {/* Simple "Stop" covers both thinking and speaking */}
           </button>
           {/* --- End Render Separate Stop Speaking Button --- */}
         
@@ -243,7 +397,7 @@ export default function Home() {
       <main className="main-content">
         <div className="chat-history-container">
           <div className="chat-history">
-            {conversationHistory.length === 0 && !isLoading && (
+            {conversationHistory.length === 0 && !isProcessing && (
                 <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
             )}
             {conversationHistory.map((msg, index) => (
@@ -252,6 +406,12 @@ export default function Home() {
                 <p>{msg.text}</p>
               </div>
             ))}
+            {/* Show loading dots only while text stream is active */}
+            {isProcessing && conversationHistory[conversationHistory.length - 1]?.type === 'ai' && (
+                <div className="chat-message ai loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            )}
           </div>
         </div>
       </main>
