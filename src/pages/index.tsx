@@ -268,7 +268,7 @@ export default function Home() {
   }, []); // Dependencies updated as needed
 
 
-  // --- Handle Text Stream (Ensure stop flag reset) ---
+  // --- Handle Text Stream (Two-Chunk Approach) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     
@@ -298,6 +298,9 @@ export default function Home() {
     
     // --- Step 4: Initiate the new fetch request --- 
     let accumulatedResponse = '';
+    let firstChunkProcessed = false; // <<< Flag to track if first short sentence was sent
+    let remainingTextBuffer = ''; // <<< Buffer for the second large chunk
+
     try {
         const response = await fetch('/api/ask', {
             method: 'POST',
@@ -326,7 +329,6 @@ export default function Home() {
 
         readerRef.current = response.body.getReader();
         const decoder = new TextDecoder();
-        let buffer = '';
 
         // Function to process the stream
         const processStream = async () => {
@@ -336,87 +338,64 @@ export default function Home() {
                     break;
                 }
                 try {
-                    // Check if aborted before reading
-                    // if (abortControllerRef.current?.signal.aborted) { ... break; }
-
                     const { done, value } = await readerRef.current!.read();
                     
-                    if (isStoppedRef.current) break; // Check after read
+                    if (isStoppedRef.current) break;
                     
                     if (done) {
                         console.log('Fetch stream finished.');
-                        // --- Add diagnostic logging --- 
-                        console.log(`Stream finished. isStoppedRef=${isStoppedRef.current}, final buffer content="${sentenceBufferRef.current}"`);
-                        // --- End diagnostic logging --- 
-                        
-                        if (!isStoppedRef.current) { // Final enqueue only if not stopped
-                           enqueueTtsRequest(sentenceBufferRef.current);
+                        // --- Send the accumulated remaining text --- 
+                        if (!isStoppedRef.current && remainingTextBuffer.trim()) {
+                            console.log(`Stream done. Enqueueing final chunk (length: ${remainingTextBuffer.length})`);
+                            enqueueTtsRequest(remainingTextBuffer.trim());
                         }
-                        sentenceBufferRef.current = '';
+                        // --- End send remaining text --- 
+                        remainingTextBuffer = ''; // Clear buffer
                         if (!isStoppedRef.current) setIsProcessing(false); 
                         break; // Exit loop
                     }
                     
-                    buffer += decoder.decode(value, { stream: true });
+                    const chunkText = decoder.decode(value, { stream: true });
+                    accumulatedResponse += chunkText;
+                    if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
                     
-                    // Process buffer line by line for SSE format
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || ''; // Keep incomplete line
+                    // --- Process First Chunk Differently --- 
+                    if (!firstChunkProcessed) {
+                       // Try to find the first sentence or ~10 words
+                       const match = accumulatedResponse.match(/^([^.?!]+[.?!]?\s*)/); // Match first sentence
+                       let firstPart = '';
+                       if (match && match[0].length > 0) {
+                          firstPart = match[0].trim();
+                          // Simple word count check (approximate)
+                          if (firstPart.split(/\s+/).length > 15) { // If first sentence is long, take ~10 words
+                              firstPart = firstPart.split(/\s+/).slice(0, 10).join(' ') + '...'; 
+                          }
+                          remainingTextBuffer = accumulatedResponse.substring(firstPart.length).trimStart(); // Store the rest
+                       } else { 
+                          // If no sentence end found yet, take first ~10 words if available
+                          const words = accumulatedResponse.split(/\s+/);
+                          if (words.length > 10) {
+                             firstPart = words.slice(0, 10).join(' ') + '...';
+                             remainingTextBuffer = accumulatedResponse.substring(firstPart.length).trimStart();
+                          } else {
+                             // Not enough text yet for first chunk, just buffer it all
+                             remainingTextBuffer = accumulatedResponse;
+                             // Don't set firstChunkProcessed = true yet
+                             continue; // Wait for more text
+                          }
+                       }
 
-                    for (const line of lines) {
-                        if (isStoppedRef.current) break; // Check in inner loop
-                        if (line.startsWith('data:')) {
-                            const dataString = line.substring(5).trim();
-                            try {
-                                const data = JSON.parse(dataString);
-                                
-                                if (data.type === 'chunk') {
-                                    accumulatedResponse += data.content;
-                                    sentenceBufferRef.current += data.content;
-                                    if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
-
-                                    // Sentence detection logic (Updated check)
-                                    const sentences = sentenceBufferRef.current.split(SENTENCE_END_REGEX);
-                                    if (sentences.length > 1) {
-                                        let sentencesToQueue : string[] = [];
-                                        for (let i = 0; i < sentences.length - 1; i++) {
-                                            const sentence = sentences[i].trim();
-                                            const delimiter = sentences[i+1]?.match(/^\s*([.?!])\s*/)?.[1];
-                                            if (sentence) {
-                                                sentencesToQueue.push(sentence + (delimiter || ''));
-                                            }
-                                            i++; 
-                                        }
-                                        // Update buffer before enqueueing
-                                        sentenceBufferRef.current = sentences[sentences.length - 1];
-                                        // Enqueue only if not stopped
-                                        if (!isStoppedRef.current) {
-                                            sentencesToQueue.forEach(s => enqueueTtsRequest(s));
-                                        }
-                                    }
-                                    
-                                } else if (data.type === 'error') {
-                                    console.error('Stream error message:', data.content);
-                                    if (!isStoppedRef.current) {
-                                        setErrorMessage(data.content || 'An error occurred during streaming.');
-                                        setIsProcessing(false);
-                                        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
-                                    }
-                                    // Stop reading the stream on server error
-                                    if (readerRef.current) readerRef.current.cancel('Stream error received');
-                                    abortControllerRef.current?.abort(); // Abort fetch
-                                    break; // Exit inner loop
-                                } else if (data.type === 'done') {
-                                   // This might be redundant if reader.read() handles done, but safe to check
-                                   console.log('Stream signaled done via data message.');
-                                   // Final processing is handled in the main loop's done check
-                                }
-                            } catch (parseError) {
-                                if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
-                            }
-                        }
+                       if (firstPart && !isStoppedRef.current) {
+                          console.log(`Sending first short chunk: "${firstPart}"`);
+                          enqueueTtsRequest(firstPart); 
+                          firstChunkProcessed = true; // Mark as processed
+                       }
+                    } else {
+                       // After first chunk, just append to the remaining buffer
+                       remainingTextBuffer += chunkText;
                     }
-                    if (isStoppedRef.current) break; // Check after processing lines
+                    // --- End Process First Chunk --- 
+                    
                 } catch (streamReadError) {
                     // Handle errors only if not deliberately stopped/aborted
                     if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
