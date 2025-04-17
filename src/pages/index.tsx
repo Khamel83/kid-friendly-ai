@@ -208,7 +208,7 @@ export default function Home() {
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Play Next Audio Chunk from Queue (No change needed here, relies on onended) ---
+  // --- Play Next Audio Chunk from Queue (Using direct recursion) ---
   const playNextAudioChunk = useCallback(() => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("Playback Queue: Stop requested, exiting.");
@@ -237,29 +237,24 @@ export default function Home() {
     const source = audioContextRef.current.createBufferSource();
     source.buffer = audioBufferToPlay;
     source.connect(audioContextRef.current.destination);
-    
-    // Store ref to current source for potential stop action
     currentAudioSourceRef.current = source;
 
     source.onended = () => {
-        // onended can be nullified by handleStopSpeaking
         if (source.onended === null) {
            console.log("onended called but was nullified (likely stopped).");
            return;
         }
-        console.log("Audio chunk playback finished.");
-        source.disconnect(); // Clean up node
         
-        // Only clear ref if this specific source ended
+        console.log("Audio chunk playback finished.");
+        source.disconnect(); 
         if (currentAudioSourceRef.current === source) {
             currentAudioSourceRef.current = null;
         }
+        isPlayingAudioSegmentRef.current = false;
         
-        isPlayingAudioSegmentRef.current = false; // Release playback lock
-        
-        // Check immediately if more chunks are ready AND not stopped
+        // Check if more chunks are ready AND not stopped
         if (!isStoppedRef.current && audioPlaybackQueueRef.current.length > 0) {
-           setTimeout(playNextAudioChunk, 0); // <<< This continues the chain
+           playNextAudioChunk(); 
         } else if (!isStoppedRef.current) {
             // No more chunks, check if TTS is still processing before setting isSpeaking=false
             if (!isProcessingTtsQueueRef.current) {
@@ -270,7 +265,7 @@ export default function Home() {
 
     source.start();
 
-  }, []); // Dependencies: Needs access to state setters if used directly
+  }, []); // Dependencies updated as needed
 
 
   // --- Handle Text Stream (Updated with stop check) ---
