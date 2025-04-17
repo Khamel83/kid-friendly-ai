@@ -366,8 +366,9 @@ export default function Home() {
         sseBuffer = lines.pop() || ''; 
 
         for (const line of lines) {
+            console.log("Raw SSE Line Received:", line); // <<< Log every raw line
             if (isStoppedRef.current) break;
-
+            
             if (line.startsWith('data:')) {
                 const dataString = line.substring(5).trim();
                 if (dataString === '[DONE]') continue;
@@ -421,6 +422,8 @@ export default function Home() {
                 } catch (parseError) {
                     if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
                 }
+            } else if (line.trim()) { // Log non-empty lines that don't start with 'data:'
+                 console.log("Non-data SSE Line Received:", line);
             }
         } // end for lines
     }; // --- End processSseBuffer definition ---
@@ -457,8 +460,9 @@ export default function Home() {
 
                 if (done) {
                     console.log('Fetch stream finished.');
-                    sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
-                    processSseBuffer(); // Process final buffer part
+                    sseBuffer += decoder.decode(undefined, { stream: false }); 
+                    console.log("Processing final SSE buffer portion."); // <<< Log final process call
+                    processSseBuffer(); 
 
                     // --- Add Final History Update (Unconditional) --- 
                     if (!isStoppedRef.current && accumulatedResponse) {
