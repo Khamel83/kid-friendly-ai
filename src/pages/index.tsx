@@ -462,16 +462,24 @@ export default function Home() {
 
                 if (done) {
                     console.log('Fetch stream finished.');
+                    // Process final part of buffer
                     sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
                     processSseBuffer(); // Process final buffer part
 
-                    // Send final remaining text
+                    // --- Add Final History Update --- 
+                    if (!isStoppedRef.current && accumulatedResponse) {
+                        console.log('Updating history with final complete AI message.');
+                        addMessageToHistory('ai', accumulatedResponse, true); // Mark as complete
+                    }
+                    // --- End Final History Update ---
+                    
+                    // Send final remaining text for TTS
                     if (!isStoppedRef.current && remainingTextBuffer.trim()) {
                         console.log(`Stream done. Enqueueing final chunk (length: ${remainingTextBuffer.length})`);
                         enqueueTtsRequest(remainingTextBuffer.trim());
                     }
                     remainingTextBuffer = '';
-                    if (!isStoppedRef.current) setIsProcessing(false);
+                    if (!isStoppedRef.current) setIsProcessing(false); 
                     break; // Exit loop
                 }
 
