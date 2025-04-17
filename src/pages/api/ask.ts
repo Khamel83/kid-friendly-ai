@@ -6,13 +6,24 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, // Ensure this is set
 });
 
+// Helper function to send SSE data
+function sendSse(res: NextApiResponse, id: string | number, data: object) {
+  res.write(`id: ${id}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') {
+  // --- Allow GET for EventSource --- 
+  if (req.method !== 'POST' && req.method !== 'GET') { 
+    res.setHeader('Allow', 'POST, GET');
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  // --- End Allow GET --- 
 
   try {
-    const { question } = req.body;
+    // --- Get question from query param for GET, fallback to body for POST ---
+    const question = (req.method === 'GET' ? req.query.question : req.body.question) as string;
+    // --- End Get question --- 
     
     if (!question || question.trim() === '') {
       return res.status(400).json({ error: 'Question is required' });
@@ -24,33 +35,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'API key is not configured' });
     }
 
-    console.log(`Sending request to OpenAI for question: "${question.substring(0, 50)}..."`);
+    console.log(`Sending streaming request to OpenAI for question: "${question.substring(0, 50)}..."`);
     
-    // Use OpenAI API directly
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // Use a standard OpenAI model
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders(); // Flush headers immediately
+
+    const stream = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: createSystemPrompt() },
         { role: "user", content: formatUserQuestion(question) },
       ],
       temperature: 0.7,
-      max_tokens: 300, // Keep max tokens reasonable
-      // Add timeout (optional, library default is 10 mins, but Vercel limits are shorter)
-      // timeout: 15000, // 15 seconds
+      max_tokens: 300, 
+      stream: true, // <<< Enable streaming
     });
     
-    const aiResponse = completion.choices[0]?.message?.content;
-
-    if (!aiResponse) {
-        console.error('OpenAI response missing content:', completion);
-        throw new Error('AI response was empty.');
+    let messageId = 0;
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+          // Send each content chunk as an SSE event
+          sendSse(res, messageId++, { type: 'chunk', content });
+      }
+      // Check for finish reason if needed (e.g., length, stop)
+      if (chunk.choices[0]?.finish_reason) {
+           console.log('OpenAI stream finished. Reason:', chunk.choices[0]?.finish_reason);
+           break; // Stop processing if OpenAI signals completion
+      }
     }
     
-    console.log('Received response from OpenAI.');
-    return res.status(200).json({ response: aiResponse });
+    // Signal the end of the stream
+    sendSse(res, messageId, { type: 'done' });
+    res.end(); // End the response stream
+    console.log('Finished sending SSE stream from /api/ask');
 
   } catch (error) {
-    console.error('Error in /api/ask:', error);
+    console.error('Error in /api/ask streaming:', error);
     let errorMessage = 'An error occurred while processing your request';
     let statusCode = 500;
 
@@ -62,6 +86,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         errorMessage = error.message; 
     }
     
-    return res.status(statusCode).json({ error: errorMessage });
+    // If headers haven't been sent, try to send JSON error
+    if (!res.headersSent) {
+        res.status(statusCode).json({ error: errorMessage });
+    } else {
+        // If headers were sent, we can't change status code,
+        // just try to send an error event and end.
+        try {
+            sendSse(res, 'error', { type: 'error', content: errorMessage });
+        } catch (sseError) {
+             console.error("Failed to send SSE error event:", sseError);
+        }
+        res.end();
+    }
   }
 } 

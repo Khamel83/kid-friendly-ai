@@ -26,6 +26,7 @@ export default function Home() {
     }
   });
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentAiResponse, setCurrentAiResponse] = useState(''); // State for streaming response
   
   // Refs for audio playback
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -75,9 +76,19 @@ export default function Home() {
   }, [conversationHistory]);
   // --- End Save history --- 
 
-  // Function to add a message to the history
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
-    setConversationHistory(prev => [...prev, { type, text }]);
+    // --- Modify to handle partial AI message update ---
+    setConversationHistory(prev => {
+      // If the last message was AI and we are adding AI, update it
+      if (type === 'ai' && prev.length > 0 && prev[prev.length - 1].type === 'ai') {
+        const updatedHistory = [...prev];
+        updatedHistory[updatedHistory.length - 1].text = text;
+        return updatedHistory;
+      }
+      // Otherwise, add a new message
+      return [...prev, { type, text }];
+    });
+    // --- End Modify --- 
   }, []);
 
   const handleQuestionSubmit = async (text: string) => {
@@ -87,46 +98,54 @@ export default function Home() {
     addMessageToHistory('user', text);
     setIsLoading(true);
     setErrorMessage('');
+    setCurrentAiResponse(''); // Clear previous partial response
+    addMessageToHistory('ai', ''); // Add placeholder for AI response
     
-    try {
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ question: text }),
-      });
-      
-      // --- Robust Error Handling --- 
-      if (!response.ok) {
-        let errorMsg = `API Error: ${response.status} ${response.statusText}`;
-        // Try to parse error JSON, but don't hard error if it fails (common for HTML error pages)
-        try {
-          const errorData = await response.json(); 
-          errorMsg = errorData.error || errorMsg; // Use specific error if available
-        } catch (jsonError) { 
-          // Intentionally ignore JSON parse error here, use status text
-          console.log(`Response from /api/ask was not JSON (status: ${response.status}). Using status text as error.`); 
-        }
-        throw new Error(errorMsg);
-      }
-      // --- End Robust Error Handling ---
+    // --- Use EventSource for Streaming --- 
+    const eventSource = new EventSource(`/api/ask?question=${encodeURIComponent(text)}`); // Send question via query param
+    let accumulatedResponse = '';
 
-      const data = await response.json();
-      console.log('API response:', data);
-      
-      addMessageToHistory('ai', data.response);
-      playAiAudio(data.response); // Call new function to play OpenAI TTS
-      
-    } catch (error) {
-      console.error('Error submitting question or getting response:', error);
-      const message = error instanceof Error ? error.message : 'Oops! Something went wrong.';
-      setErrorMessage(message); 
-      // Optionally add error message to history
-      // addMessageToHistory('ai', `Error: ${message}`); 
-    } finally {
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'chunk') {
+          accumulatedResponse += data.content;
+          setCurrentAiResponse(accumulatedResponse); // Update intermediate state
+          addMessageToHistory('ai', accumulatedResponse); // Update history progressively
+        } else if (data.type === 'done') {
+          console.log('SSE stream finished.');
+          eventSource.close();
+          setIsLoading(false);
+          // Trigger TTS with the final accumulated response
+          playAiAudio(accumulatedResponse);
+        } else if (data.type === 'error') {
+          console.error('SSE stream error:', data.content);
+          setErrorMessage(data.content || 'An error occurred during streaming.');
+          eventSource.close();
+          setIsLoading(false);
+           // Remove the empty AI placeholder message on error
+          setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+        setErrorMessage('Error processing AI response.');
+        eventSource.close();
+        setIsLoading(false);
+        // Remove the empty AI placeholder message on error
+        setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('EventSource failed:', error);
+      setErrorMessage('Connection to AI failed. Please try again.');
+      eventSource.close();
       setIsLoading(false);
-    }
+      // Remove the empty AI placeholder message on error
+      setConversationHistory(prev => prev.filter((_, i) => i !== prev.length -1 || prev[prev.length-1].type !== 'ai' || prev[prev.length-1].text !== ''));
+    };
+    // --- End EventSource Logic ---
   };
 
   const playAiAudio = async (text: string) => {
@@ -259,11 +278,6 @@ export default function Home() {
                 <p>{msg.text}</p>
               </div>
             ))}
-            {isLoading && (
-                <div className="chat-message ai loading-dots">
-                    <span></span><span></span><span></span>
-                </div>
-            )}
           </div>
         </div>
       </main>
