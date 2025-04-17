@@ -325,7 +325,7 @@ export default function Home() {
 
   }, []); // Keep dependencies minimal
 
-  // --- Handle Text Stream (Corrected Structure v3) ---
+  // --- Handle Text Stream (Revised Two-Chunk - Min Word Count) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     console.log('Submitting question via POST:', text);
@@ -352,14 +352,13 @@ export default function Home() {
 
     // Define variables needed for stream processing
     let accumulatedResponse = ''; // For display
-    let firstChunkProcessed = false;
+    let firstChunkProcessed = false; 
     let remainingTextBuffer = ''; // For second TTS request
-    let sseBuffer = ''; // Buffer specifically for SSE message lines
+    let sseBuffer = ''; 
 
-    // --- Define processSseBuffer helper function HERE (before main try block) ---
     const processSseBuffer = (): void => {
         const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop() || ''; // Keep the last potentially incomplete line
+        sseBuffer = lines.pop() || ''; 
 
         for (const line of lines) {
             if (isStoppedRef.current) break;
@@ -369,42 +368,51 @@ export default function Home() {
                 if (dataString === '[DONE]') continue;
                 try {
                     const data = JSON.parse(dataString);
-
+                    
                     if (data.type === 'chunk' && data.content) {
                         const contentChunk = data.content;
                         accumulatedResponse += contentChunk;
                         if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
 
-                        // Apply Two-Chunk Logic
+                        // --- Apply Revised Two-Chunk Logic --- 
                         if (!firstChunkProcessed) {
+                            // Append current chunk to the temporary buffer used for threshold check
                             let tempBufferForFirstChunk = remainingTextBuffer + contentChunk;
                             let firstPart = '';
-                            const match = tempBufferForFirstChunk.match(/^([^.?!]+[.?!]?\s*)/);
-                            if (match && match[0].length > 0) {
-                                firstPart = match[0].trim();
-                                if (firstPart.split(/\s+/).length > 15) {
-                                    firstPart = firstPart.split(/\s+/).slice(0, 10).join(' ') + '...';
-                                }
-                                remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
-                            } else {
-                                const words = tempBufferForFirstChunk.split(/\s+/);
-                                if (words.length >= 10) {
-                                    firstPart = words.slice(0, 10).join(' ') + '...';
-                                    remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
-                                } else {
-                                    remainingTextBuffer = tempBufferForFirstChunk;
-                                    continue; // Not enough text yet
-                                }
-                            }
+                            const words = tempBufferForFirstChunk.trim().split(/\s+/);
+                            const wordCount = words[0] === '' ? 0 : words.length; // Handle empty string case
+                            
+                            // --- Check if we have enough words for the first chunk --- 
+                            const MIN_WORDS_FOR_FIRST_CHUNK = 8;
+                            const TARGET_WORDS_FOR_FIRST_CHUNK = 10; // Approx target length
 
-                            if (firstPart && !isStoppedRef.current) {
-                                console.log(`Sending first short chunk: "${firstPart}"`);
-                                enqueueTtsRequest(firstPart);
-                                firstChunkProcessed = true;
+                            if (wordCount >= MIN_WORDS_FOR_FIRST_CHUNK) {
+                               // We have enough words, define the first part
+                               firstPart = words.slice(0, TARGET_WORDS_FOR_FIRST_CHUNK).join(' ');
+                               // Need to calculate remaining based on actual firstPart length relative to tempBuffer
+                               // Find where firstPart ends in tempBuffer (tricky with partial words/punctuation)
+                               // Safer: just keep the part of the *current* chunk that wasn't used in the first part
+                               remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
+                               
+                               if (firstPart && !isStoppedRef.current) {
+                                   console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
+                                   enqueueTtsRequest(firstPart); 
+                                   firstChunkProcessed = true; // Mark as processed
+                               }
+                            } else {
+                               // Not enough words yet, keep buffering the whole chunk for next time
+                               remainingTextBuffer = tempBufferForFirstChunk;
+                               console.log(`Buffering for first chunk. Words: ${wordCount}/${MIN_WORDS_FOR_FIRST_CHUNK}`);
+                               continue; // Continue to next line/chunk iteration
                             }
+                            // --- End Word Count Check --- 
+                            
                         } else {
+                            // After first chunk sent, append all new content to the remaining buffer
                             remainingTextBuffer += contentChunk;
                         }
+                        // --- End Revised Two-Chunk Logic ---
+
                     } else if (data.type === 'error') {
                          if (!isStoppedRef.current) { 
                              setErrorMessage(data.content || 'Stream error');
@@ -421,8 +429,8 @@ export default function Home() {
             }
         } // end for lines
     }; // --- End processSseBuffer definition ---
-
-    // --- Step 4: Main try block for fetch and stream reading ---
+    
+    // --- Main try block for fetch and stream reading ---
     try {
         const response = await fetch('/api/ask', {
             method: 'POST',
