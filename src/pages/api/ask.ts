@@ -3,6 +3,12 @@ import { createSystemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
 // Removed OpenAI import as it's no longer used here for chat
 // import OpenAI from 'openai'; 
 
+// Define a type for the messages in the conversation history
+interface HistoryMessage {
+  speaker: 'user' | 'ai';
+  text: string;
+}
+
 // Helper function to send SSE data
 function sendSse(res: NextApiResponse, id: string | number, data: object) {
   res.write(`id: ${id}\n`);
@@ -16,8 +22,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const question = (req.method === 'GET' ? req.query.question : req.body.question) as string;
-    
+    // --- Read question AND history from body ---
+    const { question, conversationHistory } = req.body as { question: string; conversationHistory?: HistoryMessage[] };
+    // --- End Read question AND history ---
+
     if (!question || question.trim() === '') {
       return res.status(400).json({ error: 'Question is required' });
     }
@@ -30,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     // --- End Use OpenRouter API Key --- 
 
-    console.log(`Sending streaming request to OpenRouter for question: "${question.substring(0, 50)}..."`);
+    console.log(`Sending streaming request to OpenRouter for question: "${question.substring(0, 50)}..." with history length: ${conversationHistory?.length ?? 0}`);
     
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -44,6 +52,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 20000); 
 
+        // --- Format LLM messages with history ---
+        const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+          { role: 'system', content: createSystemPrompt() }
+        ];
+
+        if (conversationHistory && conversationHistory.length > 0) {
+          conversationHistory.forEach(msg => {
+            llmMessages.push({
+              role: msg.speaker === 'ai' ? 'assistant' : 'user',
+              content: msg.text
+            });
+          });
+        }
+
+        // Add the current user question last
+        llmMessages.push({ role: 'user', content: formatUserQuestion(question) });
+        // --- End Format LLM messages ---
+
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -53,17 +79,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              // model: 'mistralai/mistral-7b-instruct:free', // Reverting from Mistral
-              model: 'deepseek/deepseek-chat:free', // Reverting back to Deepseek Free
-              messages: [
-                { role: 'system', content: createSystemPrompt() },
-                { role: 'user', content: formatUserQuestion(question) }
-              ],
+              model: 'deepseek/deepseek-chat:free',
+              messages: llmMessages,
               temperature: 0.7,
               max_tokens: 300,
-              stream: true, // Request streaming from OpenRouter
+              stream: true,
             }),
-            signal: controller.signal // Pass the abort signal
+            signal: controller.signal
         });
 
         clearTimeout(timeoutId);

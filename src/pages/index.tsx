@@ -322,35 +322,45 @@ export default function Home() {
 
   // --- Stop Speaking Handler (Updated) ---
   const handleStopSpeaking = useCallback(() => {
-    console.log("Stop speaking requested.");
-    // Close EventSource if text is still streaming
-     if (eventSourceRef.current) {
-        console.log("Closing active EventSource.");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-        setIsProcessing(false); // Stop processing state
-     }
-     
-    // Clear the queues
-    ttsRequestQueueRef.current = [];
-    audioPlaybackQueueRef.current = [];
-    sentenceBufferRef.current = ''; // Clear any buffered text
-    
-    // Stop the currently playing audio node, if any
+    console.log("Stop Speaking button clicked. Halting audio and queues.");
+
+    // 1. Close the Server-Sent Event stream if active
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+      console.log("Closed EventSource connection.");
+    }
+
+    // 2. Stop the currently playing audio source node
     if (currentAudioSourceRef.current) {
-      console.log("Stopping current audio source node.");
-      currentAudioSourceRef.current.onended = null; // Prevent onended logic from re-triggering playback
-      currentAudioSourceRef.current.stop();
-      currentAudioSourceRef.current.disconnect();
+      try {
+        currentAudioSourceRef.current.stop();
+        console.log("Stopped current audio source node.");
+      } catch (e) {
+        console.warn("Error stopping audio source (might have already finished):", e);
+      }
       currentAudioSourceRef.current = null;
     }
-    
-    // Reset states
-    isPlayingAudioSegmentRef.current = false;
-    isProcessingTtsQueueRef.current = false; // Release TTS processing lock
-    setIsSpeaking(false); // Update global speaking state
 
-  }, []); // No dependencies needed
+    // 3. Clear both queues immediately
+    ttsRequestQueueRef.current = [];
+    audioPlaybackQueueRef.current = [];
+    console.log("Cleared TTS request and audio playback queues.");
+
+    // 4. Reset processing/playback locks
+    isPlayingAudioSegmentRef.current = false;
+    isProcessingTtsQueueRef.current = false;
+
+    // 5. Reset state variables
+    setIsSpeaking(false);
+    setIsProcessing(false); // Ensure overall processing stops
+    
+    // 6. Reset sentence buffer
+    sentenceBufferRef.current = '';
+
+    setErrorMessage(''); // Clear any transient errors
+
+  }, []); // Dependencies: state setters if used directly, but refs are fine
 
   return (
     <div className="container full-page-layout">
