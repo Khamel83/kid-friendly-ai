@@ -31,7 +31,8 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const currentAudioSourceRef = useRef<AudioBufferSourceNode | null>(null); // Ref for the currently playing audio source
   const sentenceBufferRef = useRef(''); // Buffer for incoming text chunks to form sentences
-  const eventSourceRef = useRef<EventSource | null>(null); // Ref to manage EventSource connection
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null); // Ref for the stream reader
+  const abortControllerRef = useRef<AbortController | null>(null); // Ref to allow aborting fetch
 
   // --- REMOVE SessionStorage Loading Effect --- 
   // useEffect(() => { ... load logic ... }, []);
@@ -51,12 +52,21 @@ export default function Home() {
     // No cleanup needed for AudioContext itself generally
     // Cleanup for audio source nodes happens in stop functions
     
-    // Ensure EventSource is closed on unmount if active
+    // Ensure fetch is aborted on unmount if active
     return () => {
-        if (eventSourceRef.current) {
-            console.log("Closing EventSource on unmount.");
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
+        // Remove old EventSource cleanup
+        // if (eventSourceRef.current) { ... }
+        
+        // Add cleanup for fetch AbortController
+        if (abortControllerRef.current) {
+            console.log("Aborting fetch request on unmount.");
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        // Optionally cancel reader too, although abort should handle it
+        if (readerRef.current) {
+           readerRef.current.cancel().catch(e => console.warn("Error cancelling reader on unmount:", e));
+           readerRef.current = null;
         }
     };
   }, []);
@@ -219,116 +229,186 @@ export default function Home() {
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Handle Text Stream from /api/ask ---
-  const handleQuestionSubmit = (text: string) => { // Make synchronous
+  // --- Handle Text Stream from /api/ask (Updated to use Fetch POST) ---
+  const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     
-    console.log('Submitting question:', text);
-    // Stop any currently playing audio first
-    handleStopSpeaking(); 
+    console.log('Submitting question via POST:', text);
+    await handleStopSpeaking(); // Stop any ongoing process first
     
     addMessageToHistory('user', text);
-    setIsProcessing(true); // Indicate processing starts (text streaming)
+    setIsProcessing(true);
     setErrorMessage('');
-    sentenceBufferRef.current = ''; // Clear sentence buffer
-    ttsRequestQueueRef.current = []; // Clear TTS queue
-    audioPlaybackQueueRef.current = []; // Clear audio queue
+    sentenceBufferRef.current = '';
     
-    // Add placeholder for AI response - it will be updated
-    addMessageToHistory('ai', '', false); 
+    // Add placeholder for AI response
+    addMessageToHistory('ai', '', false);
 
-    // Close previous EventSource if it exists
-    if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+    // Abort previous fetch if any
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
     }
-
-    const newEventSource = new EventSource(`/api/ask?question=${encodeURIComponent(text)}`);
-    eventSourceRef.current = newEventSource; // Store ref
-
+    abortControllerRef.current = new AbortController();
+    
     let accumulatedResponse = '';
 
-    newEventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'chunk') {
-          accumulatedResponse += data.content;
-          sentenceBufferRef.current += data.content;
-          // Update the displayed text progressively
-          addMessageToHistory('ai', accumulatedResponse, false); 
+    try {
+        const response = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question: text,
+                conversationHistory: conversationHistory // Send the history
+            }),
+            signal: abortControllerRef.current.signal // Allow aborting
+        });
 
-          // Check for sentences in the buffer
-          const sentences = sentenceBufferRef.current.split(SENTENCE_END_REGEX);
-          
-          // If split results in more than one part, means we found sentence ends
-          if (sentences.length > 1) {
-            // Queue all complete sentences (parts before the last potential fragment)
-            for (let i = 0; i < sentences.length - 1; i++) {
-                // Re-add the delimiter if it exists and wasn't just whitespace
-                const sentence = sentences[i].trim();
-                const delimiter = sentences[i+1]?.match(/^s*([.?!])\s*/)?.[1]; // Find delimiter captured by regex if exists
-                if (sentence) {
-                    enqueueTtsRequest(sentence + (delimiter || '')); 
-                }
-                 // Increment i again because the delimiter was part of the next "sentence" from split
-                 i++; 
-            }
-            // The last part is the remaining buffer
-            sentenceBufferRef.current = sentences[sentences.length - 1];
-          }
-          
-        } else if (data.type === 'done') {
-          console.log('SSE stream finished.');
-          // Queue any remaining text in the buffer as the last sentence
-          enqueueTtsRequest(sentenceBufferRef.current); 
-          sentenceBufferRef.current = ''; // Clear buffer
-          
-          newEventSource.close();
-          eventSourceRef.current = null;
-          setIsProcessing(false); // Text streaming is done
-          // Mark the final AI message as complete (optional, depends on UI needs)
-          // addMessageToHistory('ai', accumulatedResponse, true); 
-          
-        } else if (data.type === 'error') {
-          console.error('SSE stream error:', data.content);
-          setErrorMessage(data.content || 'An error occurred during streaming.');
-          newEventSource.close();
-          eventSourceRef.current = null;
-          setIsProcessing(false);
-          setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
+        if (!response.ok) {
+            let errorMsg = `Error fetching stream: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch { /* ignore */ }
+            throw new Error(errorMsg);
         }
-      } catch (error) {
-        console.error('Error parsing SSE message:', error);
-        setErrorMessage('Error processing AI response.');
-        newEventSource.close();
-        eventSourceRef.current = null;
-        setIsProcessing(false);
-        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
-      }
-    };
 
-    newEventSource.onerror = (error) => {
-      console.error('EventSource failed:', error);
-       // Avoid setting error if it was intentionally closed
-      if (eventSourceRef.current) { 
-         setErrorMessage('Connection to AI failed. Please try again.');
-         eventSourceRef.current.close();
-         eventSourceRef.current = null;
-         setIsProcessing(false);
-         setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === ''))); // Clean up placeholder
-      }
-    };
+        if (!response.body) {
+            throw new Error('Response body is null');
+        }
+
+        readerRef.current = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        // Function to process the stream
+        const processStream = async () => {
+            while (true) {
+                try {
+                    // Check if aborted before reading
+                    if (abortControllerRef.current?.signal.aborted) {
+                       console.log('Fetch aborted by user.');
+                       break;
+                    }
+
+                    const { done, value } = await readerRef.current!.read();
+                    
+                    if (done) {
+                        console.log('Fetch stream finished.');
+                        // Queue any remaining text in the buffer
+                        enqueueTtsRequest(sentenceBufferRef.current);
+                        sentenceBufferRef.current = '';
+                        setIsProcessing(false);
+                        // Mark final message as complete? (Optional)
+                        // addMessageToHistory('ai', accumulatedResponse, true);
+                        break; // Exit loop
+                    }
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // Process buffer line by line for SSE format
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line
+
+                    for (const line of lines) {
+                        if (line.startsWith('data:')) {
+                            const dataString = line.substring(5).trim();
+                            try {
+                                const data = JSON.parse(dataString);
+                                
+                                if (data.type === 'chunk') {
+                                    accumulatedResponse += data.content;
+                                    sentenceBufferRef.current += data.content;
+                                    addMessageToHistory('ai', accumulatedResponse, false);
+
+                                    // Sentence detection logic (same as before)
+                                    const sentences = sentenceBufferRef.current.split(SENTENCE_END_REGEX);
+                                    if (sentences.length > 1) {
+                                        for (let i = 0; i < sentences.length - 1; i++) {
+                                            const sentence = sentences[i].trim();
+                                            const delimiter = sentences[i+1]?.match(/^\s*([.?!])\s*/)?.[1];
+                                            if (sentence) {
+                                                enqueueTtsRequest(sentence + (delimiter || '')); 
+                                            }
+                                            i++; 
+                                        }
+                                        sentenceBufferRef.current = sentences[sentences.length - 1];
+                                    }
+                                    
+                                } else if (data.type === 'error') {
+                                    console.error('Stream error message:', data.content);
+                                    setErrorMessage(data.content || 'An error occurred during streaming.');
+                                    setIsProcessing(false);
+                                    setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+                                    // Stop reading the stream on server error
+                                    if (readerRef.current) readerRef.current.cancel();
+                                    abortControllerRef.current?.abort(); // Abort fetch
+                                    break; // Exit inner loop
+                                } else if (data.type === 'done') {
+                                   // This might be redundant if reader.read() handles done, but safe to check
+                                   console.log('Stream signaled done via data message.');
+                                   // Final processing is handled in the main loop's done check
+                                }
+                            } catch (parseError) {
+                                console.warn('Could not parse stream data chunk:', dataString, parseError);
+                            }
+                        }
+                    }
+                } catch (streamReadError) {
+                    if (abortControllerRef.current?.signal.aborted) {
+                         console.log('Stream reading aborted.');
+                    } else {
+                        console.error('Error reading stream:', streamReadError);
+                        setErrorMessage('Connection lost during response.');
+                        setIsProcessing(false);
+                        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+                    }
+                    break; // Exit loop on error or abort
+                }
+            } // end while
+            
+            // Cleanup reader ref
+            readerRef.current = null;
+            if (!abortControllerRef.current?.signal.aborted) {
+                abortControllerRef.current = null; // Clear controller if finished naturally
+            }
+        };
+        
+        processStream(); // Start processing the stream asynchronously
+
+    } catch (error) {
+        console.error('Failed to initiate fetch stream:', error);
+        let message = 'Failed to connect to the AI.';
+        if (error instanceof Error && error.name !== 'AbortError') {
+            message = error.message;
+        }
+        if (!(error instanceof Error && error.name === 'AbortError')) {
+            setErrorMessage(message);
+        }
+        setIsProcessing(false);
+        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+        abortControllerRef.current = null; // Clear controller on fetch error
+    }
   };
 
-  // --- Stop Speaking Handler (Updated) ---
-  const handleStopSpeaking = useCallback(() => {
-    console.log("Stop Speaking button clicked. Halting audio and queues.");
+  // --- Stop Speaking Handler (Updated to include fetch abort) ---
+  const handleStopSpeaking = useCallback(async () => { // Make async if needed for cleanup
+    console.log("Stop Speaking button clicked. Halting audio, queues, and fetch.");
 
-    // 1. Close the Server-Sent Event stream if active
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      console.log("Closed EventSource connection.");
+    // 1. Abort the fetch request if active
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      console.log("Aborted active fetch request.");
+    }
+    // Cancel any pending read on the stream reader
+    if (readerRef.current) {
+       try {
+          await readerRef.current.cancel();
+          console.log("Cancelled stream reader.");
+       } catch (cancelError) {
+          console.warn("Error cancelling stream reader:", cancelError);
+       }
+       readerRef.current = null;
     }
 
     // 2. Stop the currently playing audio source node
@@ -360,7 +440,7 @@ export default function Home() {
 
     setErrorMessage(''); // Clear any transient errors
 
-  }, []); // Dependencies: state setters if used directly, but refs are fine
+  }, []); // Dependencies remain minimal
 
   return (
     <div className="container full-page-layout">
