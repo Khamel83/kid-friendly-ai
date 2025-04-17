@@ -26,8 +26,9 @@ export default function Home() {
   const ttsRequestQueueRef = useRef<string[]>([]); // Queue of sentences needing TTS
   const audioPlaybackQueueRef = useRef<AudioBuffer[]>([]); // Queue of decoded audio buffers ready to play
   const isProcessingTtsQueueRef = useRef(false); // Lock to prevent parallel TTS processing
-  const isPlayingAudioSegmentRef = useRef(false); // Lock for current audio segment playback
-  const isStoppedRef = useRef(false); // New flag to signal stop across async operations
+  const isPlayingAudioSegmentRef = useRef(false);
+  const isStoppedRef = useRef(false);
+  const firstChunkProcessedRef = useRef(false); // <<< Add Ref for firstChunkProcessed
 
   // Refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -123,7 +124,7 @@ export default function Home() {
     }
   }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue (With Initial Playback Trigger) ---
+  // --- Process TTS Request Queue (Corrected Initial Playback Trigger) ---
   const processTtsQueue = useCallback(async () => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("TTS Queue: Stop requested, exiting.");
@@ -188,12 +189,14 @@ export default function Home() {
         // Add buffer to playback queue
         audioPlaybackQueueRef.current.push(audioBuffer);
         
-        // --- Trigger playback ONLY if this is the first playable item added AND nothing is playing --- 
-        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+        // --- Corrected Trigger: Use firstChunkProcessedRef --- 
+        // Check if this is the buffer for the FIRST chunk AND nothing is playing
+        if (!firstChunkProcessedRef.current && audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
            console.log("First playable audio chunk decoded, starting playback chain.");
-           playNextAudioChunk(); // <<< Moved Trigger HERE
+           playNextAudioChunk(); // Start the chain
+           // Note: We don't set the ref here, it's set when the chunk is identified in processSseBuffer
         }
-        // --- End Initial Playback Trigger --- 
+        // --- End Corrected Trigger --- 
 
     } catch (error) {
         if (!isStoppedRef.current) { // Only log/set error if not manually stopped
@@ -331,7 +334,7 @@ export default function Home() {
 
   }, []); // Keep dependencies minimal
 
-  // --- Handle Text Stream (Revised First Chunk Trigger & Final History) ---
+  // --- Handle Text Stream (Reset firstChunkProcessedRef) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     console.log('Submitting question via POST:', text);
@@ -339,8 +342,9 @@ export default function Home() {
     // Step 1: Stop ongoing process
     await handleStopSpeaking();
 
-    // Step 2: Reset stop flag for new request
-    isStoppedRef.current = false;
+    // Step 2: Reset stop flag AND first chunk flag
+    isStoppedRef.current = false; 
+    firstChunkProcessedRef.current = false; // <<< Reset ref here
 
     // Step 3: Setup state
     addMessageToHistory('user', text);
@@ -357,7 +361,6 @@ export default function Home() {
     abortControllerRef.current = new AbortController();
 
     let accumulatedResponse = ''; // For display
-    let firstChunkProcessed = false; 
     let remainingTextBuffer = ''; // For second TTS request
     let sseBuffer = ''; 
 
@@ -380,8 +383,8 @@ export default function Home() {
                         accumulatedResponse += contentChunk;
                         if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
 
-                        // Apply Two-Chunk Logic
-                        if (!firstChunkProcessed) {
+                        // Apply Two-Chunk Logic (using ref)
+                        if (!firstChunkProcessedRef.current) { // <<< Check ref
                             let tempBufferForFirstChunk = remainingTextBuffer + contentChunk;
                             let firstPart = '';
                             const words = tempBufferForFirstChunk.trim().split(/\s+/);
@@ -399,7 +402,7 @@ export default function Home() {
                                if (firstPart && !isStoppedRef.current) {
                                    console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
                                    enqueueTtsRequest(firstPart); 
-                                   firstChunkProcessed = true;
+                                   firstChunkProcessedRef.current = true; // <<< Set ref here
                                }
                             } else {
                                remainingTextBuffer = tempBufferForFirstChunk;
