@@ -6,6 +6,7 @@ import { Buffer } from 'buffer'; // Needed for sentence detection buffer
 interface Message {
   type: 'user' | 'ai';
   text: string;
+  isComplete?: boolean; // Optional flag
 }
 
 // Simple sentence end detection (can be improved)
@@ -86,21 +87,26 @@ export default function Home() {
 
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string, isComplete: boolean = true) => {
     setConversationHistory(prev => {
-      // If adding AI text and the last message is also AI (and not marked complete yet?), update it
-      if (type === 'ai' && prev.length > 0 && prev[prev.length - 1].type === 'ai' && !isComplete) {
-         // Check if the last AI message placeholder is empty, if so replace it, otherwise update.
-         // This handles the initial placeholder addition vs subsequent updates.
-         const lastMsg = prev[prev.length - 1];
-         if (lastMsg.text === '') { // Replace empty placeholder
-            return [...prev.slice(0, -1), { type, text }];
-         } else { // Update existing text
-             const updatedHistory = [...prev];
-             updatedHistory[updatedHistory.length - 1].text = text;
-             return updatedHistory;
-         }
+      const lastIndex = prev.length - 1;
+      // --- Refined Logic --- 
+      if (type === 'ai' && lastIndex >= 0 && prev[lastIndex].type === 'ai' && !prev[lastIndex].isComplete) {
+        // If last message is AI and not marked complete, UPDATE it.
+        const updatedHistory = [...prev];
+        updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: text, isComplete: isComplete };
+        return updatedHistory;
+      } else if (type === 'ai' && text === '' && !isComplete) {
+        // If adding an empty AI placeholder, just add it.
+        return [...prev, { type, text, isComplete: false }];
+      } else if (type === 'ai' && lastIndex >= 0 && prev[lastIndex].type === 'ai' && prev[lastIndex].text === '' && !prev[lastIndex].isComplete) {
+        // If last message is an EMPTY AI placeholder, REPLACE it with the first real text.
+        const updatedHistory = [...prev.slice(0, lastIndex)]; // Remove placeholder
+        updatedHistory.push({ type, text, isComplete: isComplete }); // Add new message
+        return updatedHistory;
+      } else {
+        // Otherwise (user message, or first AI message after user), add a new entry.
+        return [...prev, { type, text, isComplete: type === 'user' ? true : isComplete }];
       }
-      // Otherwise, add a new message entry
-      return [...prev, { type, text }];
+      // --- End Refined Logic --- 
     });
   }, []);
 
@@ -117,7 +123,7 @@ export default function Home() {
     }
   }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue (Simplified: Only Enqueue) ---
+  // --- Process TTS Request Queue (With Initial Playback Trigger) ---
   const processTtsQueue = useCallback(async () => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("TTS Queue: Stop requested, exiting.");
@@ -179,9 +185,15 @@ export default function Home() {
         
         console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
         
-        // --- Only add buffer to playback queue --- 
+        // Add buffer to playback queue
         audioPlaybackQueueRef.current.push(audioBuffer);
-        // --- REMOVED check and call to playNextAudioChunk --- 
+        
+        // --- Trigger playback ONLY if this is the first playable item added AND nothing is playing --- 
+        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+           console.log("First playable audio chunk decoded, starting playback chain.");
+           playNextAudioChunk(); // <<< Moved Trigger HERE
+        }
+        // --- End Initial Playback Trigger --- 
 
     } catch (error) {
         if (!isStoppedRef.current) { // Only log/set error if not manually stopped
@@ -383,11 +395,6 @@ export default function Home() {
                                if (firstPart && !isStoppedRef.current) {
                                    console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
                                    enqueueTtsRequest(firstPart); 
-                                   // Trigger Playback AFTER first chunk is enqueued
-                                   if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
-                                        console.log("First audio chunk enqueued, starting playback chain.");
-                                        playNextAudioChunk(); 
-                                   }
                                    firstChunkProcessed = true;
                                }
                             } else {
