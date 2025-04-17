@@ -345,14 +345,15 @@ export default function Home() {
                     
                     if (done) {
                         console.log('Fetch stream finished.');
-                        // Queue any remaining text in the buffer only if not stopped
-                        if (!isStoppedRef.current) {
-                            enqueueTtsRequest(sentenceBufferRef.current);
+                        // --- Add diagnostic logging --- 
+                        console.log(`Stream finished. isStoppedRef=${isStoppedRef.current}, final buffer content="${sentenceBufferRef.current}"`);
+                        // --- End diagnostic logging --- 
+                        
+                        if (!isStoppedRef.current) { // Final enqueue only if not stopped
+                           enqueueTtsRequest(sentenceBufferRef.current);
                         }
                         sentenceBufferRef.current = '';
-                        if (!isStoppedRef.current) setIsProcessing(false); // Stop processing state if naturally finished
-                        // Mark final message as complete? (Optional)
-                        // addMessageToHistory('ai', accumulatedResponse, true);
+                        if (!isStoppedRef.current) setIsProcessing(false); 
                         break; // Exit loop
                     }
                     
