@@ -267,6 +267,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   }, [stopRecordingInternal]); // Dependency: stopRecordingInternal
 
   const startRecording = async () => {
+    // --- Clear previous errors --- 
+    setError(null); 
+    // --- End Clear previous errors --- 
     try {
       // Cancel any ongoing speech synthesis
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -274,7 +277,6 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         console.log("Cancelled ongoing speech synthesis.");
       }
 
-      setError(null);
       audioChunksRef.current = []; // Reset chunks
       
       // Check if we can get user media
@@ -380,12 +382,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   return (
     <div className="voice-button-container">
       <button 
-        className={`voice-button ${isListening ? 'listening' : ''}`}
+        className={`voice-button ${isListening ? 'listening' : 'idle'}`}
         onClick={isListening ? stopRecordingInternal : startRecording} 
-        aria-label={isListening ? "Stop recording" : "Start recording"}
+        aria-label={isListening ? "Stop talking" : "Start talking"}
       >
-        {isListening ? 'Stop Recording' : 'Start Recording'}
-        <div className={`pulse-ring ${isListening ? 'animate' : ''}`}></div>
+        {isListening ? 'Stop' : 'Talk'}
+        {isListening && <div className="pulse-ring animate"></div>}
       </button>
       
       {error && <p className="error-message">{error}</p>}

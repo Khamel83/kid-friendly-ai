@@ -1,43 +1,64 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import VoiceButton from '../components/VoiceButton';
 
+interface Message {
+  type: 'user' | 'ai';
+  text: string;
+}
+
 export default function Home() {
   const [isListening, setIsListening] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [question, setQuestion] = useState('');
-  const [response, setResponse] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Loading AI response
+  const [isSpeaking, setIsSpeaking] = useState(false); // AI is speaking
+  const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const speakingRef = useRef(false);
-  const synth = useRef<SpeechSynthesis | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  
+  // Refs for audio playback
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Initialize speech synthesis
+  // Initialize AudioContext on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        synth.current = window.speechSynthesis;
-        console.log('Available voices:', synth.current.getVoices());
-      } catch (err) {
-        console.error('Error initializing speech synthesis:', err);
-        setErrorMessage('Speech synthesis is not available in this browser.');
-      }
+    // Ensure AudioContext is created only once and in the browser
+    if (typeof window !== 'undefined' && !audioContextRef.current) {
+       try {
+         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+         console.log('AudioContext initialized for playback.');
+       } catch (err) {
+         console.error('Error initializing AudioContext:', err);
+         setErrorMessage('Web Audio API is not available in this browser.');
+       }
     }
     
+    // Cleanup audio source on unmount
     return () => {
-      if (synth.current && utteranceRef.current) {
-        synth.current.cancel();
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
       }
+      // Optionally close the context, or keep it alive for reuse
+      // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      //   audioContextRef.current.close();
+      // }
     };
   }, []);
 
+  // Function to add a message to the history
+  const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
+    setConversationHistory(prev => [...prev, { type, text }]);
+  }, []);
+
   const handleQuestionSubmit = async (text: string) => {
+    if (!text || text.trim() === '') return;
+    
+    console.log('Submitting question:', text);
+    addMessageToHistory('user', text);
+    setIsLoading(true);
+    setErrorMessage('');
+    
     try {
-      console.log('Submitting question:', text);
-      setQuestion(text);
-      setIsLoading(true);
-      setErrorMessage('');
-      
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: {
@@ -46,96 +67,113 @@ export default function Home() {
         body: JSON.stringify({ question: text }),
       });
       
+      // --- Robust Error Handling --- 
+      if (!response.ok) {
+        let errorMsg = `API Error: ${response.status} ${response.statusText}`;
+        try {
+          const errorData = await response.json(); // Try to parse error JSON
+          errorMsg = errorData.error || errorMsg; // Use specific error if available
+        } catch (jsonError) {
+          // If parsing JSON fails, use the status text
+          console.error('Failed to parse error JSON', jsonError);
+        }
+        throw new Error(errorMsg);
+      }
+      // --- End Robust Error Handling --- 
+
       const data = await response.json();
       console.log('API response:', data);
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong');
-      }
+      addMessageToHistory('ai', data.response);
+      playAiAudio(data.response); // Call new function to play OpenAI TTS
       
-      setResponse(data.response);
-      speakResponse(data.response);
     } catch (error) {
-      console.error('Error:', error);
-      setErrorMessage('Oops! Something went wrong. Please try again.');
+      console.error('Error submitting question or getting response:', error);
+      const message = error instanceof Error ? error.message : 'Oops! Something went wrong.';
+      setErrorMessage(message); 
+      // Optionally add error message to history
+      // addMessageToHistory('ai', `Error: ${message}`); 
     } finally {
       setIsLoading(false);
     }
   };
 
-  const speakResponse = (text: string) => {
-    if (synth.current) {
-      // Cancel any ongoing speech
-      if (speakingRef.current) {
-        synth.current.cancel();
+  const playAiAudio = async (text: string) => {
+    if (!text || !audioContextRef.current) return;
+
+    // Stop any currently playing audio
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.stop();
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+
+    setIsSpeaking(true);
+    setErrorMessage(''); // Clear previous errors
+
+    try {
+      console.log('Requesting TTS audio for:', text.substring(0,50)+"...");
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!response.ok || !response.body) {
+         let errorMsg = `TTS API Error: ${response.status} ${response.statusText}`;
+          try {
+              const errorData = await response.json();
+              errorMsg = errorData.error || errorMsg;
+          } catch (jsonError) {
+              console.error('Failed to parse TTS error JSON', jsonError);
+          }
+         throw new Error(errorMsg);
+      }
+
+      console.log('Received TTS audio stream.');
+      const audioData = await response.arrayBuffer();
+      console.log('TTS audio data length:', audioData.byteLength);
+
+      if (!audioContextRef.current) {
+         throw new Error("AudioContext is not available");
       }
       
-      try {
-        const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Use a child-friendly voice if available
-        const voices = synth.current.getVoices();
-        console.log('Available voices:', voices);
-        
-        const kidVoice = voices.find(voice => 
-          voice.name.includes('Kid') || 
-          voice.name.includes('child') || 
-          voice.name.includes('Junior')
-        );
-        
-        if (kidVoice) {
-          console.log('Using kid voice:', kidVoice.name);
-          utterance.voice = kidVoice;
-        } else {
-          // Try to find a friendly female voice as fallback
-          const femaleVoice = voices.find(voice => 
-            voice.name.includes('Female') || 
-            voice.name.includes('Girl') ||
-            (!voice.name.includes('Male') && voice.lang.includes('en-US'))
-          );
-          
-          if (femaleVoice) {
-            console.log('Using female voice:', femaleVoice.name);
-            utterance.voice = femaleVoice;
-          }
-        }
-        
-        // Slightly slower speech rate for clarity
-        utterance.rate = 0.9;
-        utterance.pitch = 1.1;
-        
-        utterance.onstart = () => {
-          console.log('Speech started');
-          speakingRef.current = true;
-        };
-        
-        utterance.onend = () => {
-          console.log('Speech ended');
-          speakingRef.current = false;
-        };
-        
-        utterance.onerror = (event) => {
-          console.error('Speech error:', event);
-          speakingRef.current = false;
-        };
-        
-        utteranceRef.current = utterance;
-        synth.current.speak(utterance);
-      } catch (err) {
-        console.error('Error in speech synthesis:', err);
-        setErrorMessage('Could not read the response aloud. Please try again.');
+      // Ensure context is running (might be suspended on page load)
+      if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
       }
-    } else {
-      setErrorMessage('Speech synthesis is not available in this browser.');
+      
+      const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+      console.log('Decoded audio buffer duration:', audioBuffer.duration);
+
+      const source = audioContextRef.current.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContextRef.current.destination);
+      source.onended = () => {
+        console.log('OpenAI TTS playback finished.');
+        setIsSpeaking(false);
+        source.disconnect();
+        sourceNodeRef.current = null;
+      };
+      source.start();
+      sourceNodeRef.current = source; // Store reference to the playing source
+
+    } catch (error) {
+      console.error('Error playing AI audio:', error);
+      const message = error instanceof Error ? error.message : 'Failed to play audio response.';
+      setErrorMessage(message);
+      setIsSpeaking(false); // Ensure speaking state is reset on error
     }
   };
 
-  const handleStopSpeaking = () => {
-    if (synth.current && speakingRef.current) {
-      synth.current.cancel();
-      speakingRef.current = false;
+  // Function to stop audio playback manually (optional)
+  const handleStopSpeaking = useCallback(() => {
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.stop(); // This triggers the onended event
     }
-  };
+  }, []);
 
   return (
     <div className="container">
@@ -149,59 +187,44 @@ export default function Home() {
         <div className="app-container">
           <h1 className="title">Ask Me Anything!</h1>
           
-          {!isListening && !isLoading && !response && (
-            <p className="instructions">
-              Tap the button and ask your question!
-            </p>
-          )}
-          
-          <VoiceButton 
-            onResult={handleQuestionSubmit} 
-            isListening={isListening}
-            setIsListening={setIsListening}
-          />
-          
-          {isLoading && (
-            <div className="loading">
-              <div className="loading-animation">
-                <div></div><div></div><div></div><div></div>
+          {/* Chat History Display */}
+          <div className="chat-history">
+            {conversationHistory.map((msg, index) => (
+              <div key={index} className={`chat-message ${msg.type}`}>
+                <p>{msg.text}</p>
               </div>
-              <p>Thinking...</p>
-            </div>
-          )}
+            ))}
+            {isLoading && (
+                <div className="chat-message ai loading-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            )}
+          </div>
           
-          {errorMessage && (
-            <div className="error-container">
-              <p>{errorMessage}</p>
-            </div>
-          )}
+          {/* Voice Button and Status */}
+          <div className="controls-container">
+            <VoiceButton 
+              onResult={handleQuestionSubmit} 
+              isListening={isListening}
+              setIsListening={setIsListening}
+            />
           
-          {response && !isLoading && (
-            <div className="response-container">
-              {question && <p className="question">"{question}"</p>}
-              <div className="response-content">
-                <p>{response}</p>
+            {errorMessage && (
+              <div className="error-container">
+                <p>{errorMessage}</p>
               </div>
-              {speakingRef.current && (
+            )}
+
+            {isSpeaking && (
                 <button 
-                  className="stop-button" 
-                  onClick={handleStopSpeaking}
+                    className="stop-button" 
+                    onClick={handleStopSpeaking}
                 >
-                  Stop Speaking
+                    Stop Speaking
                 </button>
-              )}
-              <button 
-                className="reset-button"
-                onClick={() => {
-                  setQuestion('');
-                  setResponse('');
-                  handleStopSpeaking();
-                }}
-              >
-                Ask Another Question
-              </button>
-            </div>
-          )}
+            )}
+          </div>
+
         </div>
       </main>
     </div>

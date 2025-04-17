@@ -85,13 +85,14 @@ a {
 
 .voice-button {
   position: relative;
-  background-color: var(--primary-color);
+  /* Default to idle state (red) */
+  background-color: var(--error-color);
   color: white;
   border: none;
   border-radius: 50%;
   width: 180px;
   height: 180px;
-  font-size: 1.5rem;
+  font-size: 2.5rem; /* Larger text for Talk/Stop */
   font-weight: bold;
   cursor: pointer;
   outline: none;
@@ -100,21 +101,28 @@ a {
   justify-content: center;
   align-items: center;
   margin-bottom: 1rem;
-  box-shadow: 0 6px 16px rgba(74, 107, 223, 0.3);
+  box-shadow: 0 6px 16px rgba(244, 67, 54, 0.3); /* Red shadow */
 }
 
-.voice-button:hover {
-  background-color: var(--primary-light);
+.voice-button.idle:hover {
+  background-color: #d32f2f; /* Darker red on hover */
+  transform: scale(1.05);
+}
+
+.voice-button.listening {
+  /* Listening state (green) */
+  background-color: var(--success-color);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.3); /* Green shadow */
+  animation: pulse-green 1.5s infinite;
+}
+
+.voice-button.listening:hover {
+  background-color: #388e3c; /* Darker green on hover */
   transform: scale(1.05);
 }
 
 .voice-button:active {
   transform: scale(0.95);
-}
-
-.voice-button.listening {
-  background-color: var(--accent-color);
-  animation: pulse 1.5s infinite;
 }
 
 .pulse-ring {
@@ -126,11 +134,12 @@ a {
 }
 
 .pulse-ring.animate {
-  animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
-  border: 6px solid var(--accent-color);
+  /* Pulse with green color */
+  animation: pulse-ring-green 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+  border: 6px solid var(--success-color);
 }
 
-@keyframes pulse-ring {
+@keyframes pulse-ring-green {
   0% {
     transform: scale(0.95);
     opacity: 0.7;
@@ -141,7 +150,8 @@ a {
   }
 }
 
-@keyframes pulse {
+/* Keep original pulse for reference if needed, renamed */
+/* @keyframes pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(255, 154, 60, 0.7);
   }
@@ -150,6 +160,19 @@ a {
   }
   100% {
     box-shadow: 0 0 0 0 rgba(255, 154, 60, 0);
+  }
+} */
+
+/* New pulsing animation for green button */
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 20px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
   }
 }
 
