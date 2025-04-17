@@ -5,6 +5,7 @@ interface VoiceButtonProps {
   onResult: (text: string) => void;
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
+  disabled?: boolean;
 }
 // --- End Simplify Props ---
 
@@ -12,6 +13,7 @@ export default function VoiceButton({
   onResult, 
   isListening, 
   setIsListening, 
+  disabled
 }: VoiceButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -300,13 +302,24 @@ export default function VoiceButton({
   const buttonClass = isListening ? 'recording' : 'idle'; // Use 'recording' class
   // --- End Simplify Button State Logic --- 
 
+  // Toggle recording state
+  const handleToggleListen = () => {
+    if (disabled) return;
+    if (isListening) {
+      stopRecordingInternal();
+    } else {
+      startRecording();
+    }
+  };
+
   return (
     <div className="voice-button-container">
       {/* Single button manages Talk/Stop Recording */}
       <button 
         className={`voice-button ${buttonClass}`} 
-        onClick={buttonAction} 
+        onClick={handleToggleListen} 
         aria-label={buttonText} 
+        disabled={disabled || (isListening && !audioContextRef.current)}
       >
         {buttonText} 
         {isListening && <div className="pulse-ring animate"></div>} 

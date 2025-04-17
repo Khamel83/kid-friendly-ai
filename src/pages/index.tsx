@@ -26,6 +26,7 @@ export default function Home() {
   const audioPlaybackQueueRef = useRef<AudioBuffer[]>([]); // Queue of decoded audio buffers ready to play
   const isProcessingTtsQueueRef = useRef(false); // Lock to prevent parallel TTS processing
   const isPlayingAudioSegmentRef = useRef(false); // Lock for current audio segment playback
+  const isStoppedRef = useRef(false); // New flag to signal stop across async operations
 
   // Refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -68,6 +69,13 @@ export default function Home() {
            readerRef.current.cancel().catch(e => console.warn("Error cancelling reader on unmount:", e));
            readerRef.current = null;
         }
+        if (currentAudioSourceRef.current) {
+            try {
+                currentAudioSourceRef.current.onended = null; // Prevent onended firing
+                currentAudioSourceRef.current.stop();
+            } catch (e) { /* ignore */ }
+            currentAudioSourceRef.current = null;
+        }
     };
   }, []);
   // --- End Initialize AudioContext --- 
@@ -96,8 +104,9 @@ export default function Home() {
     });
   }, []);
 
-  // --- Function to add sentence to TTS Queue and trigger processing ---
+  // --- Function to add sentence to TTS Queue (Updated with stop check) ---
   const enqueueTtsRequest = useCallback((sentence: string) => {
+    if (isStoppedRef.current) return; // Don't enqueue if stopped
     if (sentence.trim()) {
       console.log(`Enqueueing TTS for: "${sentence.trim().substring(0,30)}..."`);
       ttsRequestQueueRef.current.push(sentence.trim());
@@ -106,138 +115,171 @@ export default function Home() {
           processTtsQueue();
       }
     }
-  }, []); // No dependencies needed as it uses refs and calls another function
+  }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue ---
+  // --- Process TTS Request Queue (Updated with stop check) ---
   const processTtsQueue = useCallback(async () => {
-     if (isProcessingTtsQueueRef.current || ttsRequestQueueRef.current.length === 0) {
-         isProcessingTtsQueueRef.current = false; // Ensure lock is released if queue empty
-         return; // Already processing or queue is empty
-     }
+    if (isStoppedRef.current) { // Check stop flag
+        console.log("TTS Queue: Stop requested, exiting.");
+        isProcessingTtsQueueRef.current = false;
+        return;
+    }
+    if (isProcessingTtsQueueRef.current || ttsRequestQueueRef.current.length === 0) {
+        isProcessingTtsQueueRef.current = false; // Ensure lock is released if queue empty
+        return; // Already processing or queue is empty
+    }
 
-     isProcessingTtsQueueRef.current = true; // Acquire lock
-     setErrorMessage(''); // Clear errors when starting new TTS processing
+    isProcessingTtsQueueRef.current = true; // Acquire lock
+    setErrorMessage(''); // Clear errors when starting new TTS processing
 
-     const sentenceToProcess = ttsRequestQueueRef.current.shift(); // Get next sentence
+    const sentenceToProcess = ttsRequestQueueRef.current.shift(); // Get next sentence
 
-     if (!sentenceToProcess) {
-         isProcessingTtsQueueRef.current = false; // Release lock if somehow sentence is undefined
-         return;
-     }
+    if (!sentenceToProcess) {
+        isProcessingTtsQueueRef.current = false; // Release lock if somehow sentence is undefined
+        return;
+    }
 
-     console.log(`Processing TTS for: "${sentenceToProcess.substring(0,30)}..."`);
-     setIsSpeaking(true); // Indicate that we are actively trying to generate/queue speech
+    console.log(`Processing TTS for: "${sentenceToProcess.substring(0,30)}..."`);
+    if (!isStoppedRef.current) setIsSpeaking(true); // Indicate that we are actively trying to generate/queue speech
 
-     try {
-         const response = await fetch('/api/tts', {
-             method: 'POST',
-             headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ text: sentenceToProcess }),
-         });
+    try {
+        const response = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: sentenceToProcess }),
+        });
 
-         if (!response.ok || !response.body) {
-             let errorMsg = `TTS Error ${response.status}`;
-             try {
-                 const errorData = await response.json();
-                 errorMsg = errorData.error || errorMsg;
-             } catch { /* Ignore JSON parse error */ }
-             throw new Error(errorMsg);
-         }
+        if (!response.ok || !response.body) {
+            let errorMsg = `TTS Error ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error || errorMsg;
+            } catch { /* Ignore JSON parse error */ }
+            throw new Error(errorMsg);
+        }
 
-         const audioData = await response.arrayBuffer();
-         console.log(`TTS audio data length for sentence: ${audioData.byteLength}`);
+        if (isStoppedRef.current) return; // Check after fetch
 
-         if (!audioContextRef.current) throw new Error("AudioContext lost");
-         
-         // Resume context if needed
-         if (audioContextRef.current.state === 'suspended') {
-             await audioContextRef.current.resume();
-         }
+        const audioData = await response.arrayBuffer();
 
-         const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-         console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
-         
-         // Add buffer to playback queue
-         audioPlaybackQueueRef.current.push(audioBuffer);
-         
-         // Trigger playback check if not already playing
-         if (!isPlayingAudioSegmentRef.current) {
-            playNextAudioChunk();
-         }
+        if (isStoppedRef.current) return; // Check after getting data
 
-     } catch (error) {
-         console.error('Error fetching or decoding TTS audio:', error);
-         const message = error instanceof Error ? error.message : 'Failed to get audio for a sentence.';
-         setErrorMessage(message);
-         // Don't clear the whole speaking state on a single sentence failure
-         // Maybe add sentence back to queue? Or just drop it? For now, drop it.
-     } finally {
-         // Release lock and immediately check if more items are in the queue
-         isProcessingTtsQueueRef.current = false;
-         // Check queue again asynchronously to allow state updates
-         setTimeout(processTtsQueue, 0); 
-     }
+        if (!audioContextRef.current) throw new Error("AudioContext lost");
+        
+        // Resume context if needed
+        if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+        }
+
+        if (isStoppedRef.current) return; // Check after resume
+
+        const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+
+        if (isStoppedRef.current) return; // Check after decode
+        
+        console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
+        audioPlaybackQueueRef.current.push(audioBuffer);
+        
+        // Trigger playback check if not already playing
+        if (!isPlayingAudioSegmentRef.current) {
+           playNextAudioChunk();
+        }
+
+    } catch (error) {
+        if (!isStoppedRef.current) { // Only log/set error if not manually stopped
+            console.error('Error fetching or decoding TTS audio:', error);
+            const message = error instanceof Error ? error.message : 'Failed to get audio for a sentence.';
+            setErrorMessage(message);
+        }
+        // Don't clear the whole speaking state on a single sentence failure
+        // Maybe add sentence back to queue? Or just drop it? For now, drop it.
+    } finally {
+        // Release lock and immediately check if more items are in the queue
+        isProcessingTtsQueueRef.current = false;
+        // Check queue again only if not stopped and queue has items
+        if (!isStoppedRef.current && ttsRequestQueueRef.current.length > 0) { // Check before scheduling next
+           setTimeout(processTtsQueue, 0); 
+        }
+    }
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Play Next Audio Chunk from Queue ---
+  // --- Play Next Audio Chunk from Queue (Updated with stop check) ---
   const playNextAudioChunk = useCallback(() => {
-      if (isPlayingAudioSegmentRef.current || audioPlaybackQueueRef.current.length === 0 || !audioContextRef.current) {
-          // If nothing to play and queue empty, ensure speaking state is false
-          if(audioPlaybackQueueRef.current.length === 0 && !isPlayingAudioSegmentRef.current) {
-             setIsSpeaking(false);
-          }
-          return; // Already playing, queue empty, or context lost
-      }
+    if (isStoppedRef.current) { // Check stop flag
+        console.log("Playback Queue: Stop requested, exiting.");
+        isPlayingAudioSegmentRef.current = false;
+        return;
+    }
+    if (isPlayingAudioSegmentRef.current || audioPlaybackQueueRef.current.length === 0 || !audioContextRef.current) {
+        // If nothing to play and queue empty, ensure speaking state is false
+        if(audioPlaybackQueueRef.current.length === 0 && !isPlayingAudioSegmentRef.current && !isProcessingTtsQueueRef.current) {
+           if (!isStoppedRef.current) setIsSpeaking(false);
+        }
+        return; // Already playing, queue empty, or context lost
+    }
+    
+    if (!isStoppedRef.current) setIsSpeaking(true); // Set speaking only if not stopped
 
-      isPlayingAudioSegmentRef.current = true; // Acquire playback lock
-      setIsSpeaking(true); // Overall system is speaking
+    const audioBufferToPlay = audioPlaybackQueueRef.current.shift(); // Get next buffer
 
-      const audioBufferToPlay = audioPlaybackQueueRef.current.shift(); // Get next buffer
+    if (!audioBufferToPlay) {
+        isPlayingAudioSegmentRef.current = false; // Release lock if buffer somehow undefined
+        if (!isStoppedRef.current) setIsSpeaking(false); // No buffer, not speaking
+        return;
+    }
 
-      if (!audioBufferToPlay) {
-          isPlayingAudioSegmentRef.current = false; // Release lock if buffer somehow undefined
-          setIsSpeaking(false); // No buffer, not speaking
-          return;
-      }
+    console.log("Starting playback of next audio chunk...");
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = audioBufferToPlay;
+    source.connect(audioContextRef.current.destination);
+    
+    // Store ref to current source for potential stop action
+    currentAudioSourceRef.current = source;
 
-      console.log("Starting playback of next audio chunk...");
-      const source = audioContextRef.current.createBufferSource();
-      source.buffer = audioBufferToPlay;
-      source.connect(audioContextRef.current.destination);
-      
-      // Store ref to current source for potential stop action
-      currentAudioSourceRef.current = source;
+    source.onended = () => {
+        // onended can be nullified by handleStopSpeaking
+        if (source.onended === null) {
+           console.log("onended called but was nullified (likely stopped).");
+           return;
+        }
+        console.log("Audio chunk playback finished.");
+        source.disconnect(); // Clean up node
+        
+        // Only clear ref if this specific source ended
+        if (currentAudioSourceRef.current === source) { 
+            currentAudioSourceRef.current = null;
+        }
+        
+        isPlayingAudioSegmentRef.current = false; // Release playback lock
+        
+        // Check immediately if more chunks are ready AND not stopped
+        if (!isStoppedRef.current && audioPlaybackQueueRef.current.length > 0) { // Check before scheduling next
+           setTimeout(playNextAudioChunk, 0); 
+        } else if (!isStoppedRef.current) {
+            // No more chunks and not stopped, check if TTS might still be processing
+            if (!isProcessingTtsQueueRef.current) {
+               setIsSpeaking(false);
+            }
+        }
+    };
 
-      source.onended = () => {
-          console.log("Audio chunk playback finished.");
-          source.disconnect(); // Clean up node
-          
-          // Only clear ref if this specific source ended
-          if (currentAudioSourceRef.current === source) { 
-              currentAudioSourceRef.current = null;
-          }
-          
-          isPlayingAudioSegmentRef.current = false; // Release playback lock
-          
-          // Check immediately if more chunks are ready to play
-          setTimeout(playNextAudioChunk, 0); 
-      };
-
-      source.start();
+    source.start();
 
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Handle Text Stream from /api/ask (Updated to use Fetch POST) ---
+  // --- Handle Text Stream (Updated with stop check) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     
     console.log('Submitting question via POST:', text);
     await handleStopSpeaking(); // Stop any ongoing process first
+    isStoppedRef.current = false; // Reset stop flag for new request
     
     addMessageToHistory('user', text);
-    setIsProcessing(true);
+    setIsProcessing(true); // Start processing
+    setIsSpeaking(false); // Not speaking yet
     setErrorMessage('');
     sentenceBufferRef.current = '';
     
@@ -276,6 +318,8 @@ export default function Home() {
             throw new Error('Response body is null');
         }
 
+        if (isStoppedRef.current) return; // Check after fetch initiated
+
         readerRef.current = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -283,21 +327,26 @@ export default function Home() {
         // Function to process the stream
         const processStream = async () => {
             while (true) {
+                if (isStoppedRef.current) { // Check stop flag in loop
+                    console.log("Stream processing loop: Stop requested.");
+                    break;
+                }
                 try {
                     // Check if aborted before reading
-                    if (abortControllerRef.current?.signal.aborted) {
-                       console.log('Fetch aborted by user.');
-                       break;
-                    }
+                    // if (abortControllerRef.current?.signal.aborted) { ... break; }
 
                     const { done, value } = await readerRef.current!.read();
                     
+                    if (isStoppedRef.current) break; // Check after read
+                    
                     if (done) {
                         console.log('Fetch stream finished.');
-                        // Queue any remaining text in the buffer
-                        enqueueTtsRequest(sentenceBufferRef.current);
+                        // Queue any remaining text in the buffer only if not stopped
+                        if (!isStoppedRef.current) {
+                            enqueueTtsRequest(sentenceBufferRef.current);
+                        }
                         sentenceBufferRef.current = '';
-                        setIsProcessing(false);
+                        if (!isStoppedRef.current) setIsProcessing(false); // Stop processing state if naturally finished
                         // Mark final message as complete? (Optional)
                         // addMessageToHistory('ai', accumulatedResponse, true);
                         break; // Exit loop
@@ -310,6 +359,7 @@ export default function Home() {
                     buffer = lines.pop() || ''; // Keep incomplete line
 
                     for (const line of lines) {
+                        if (isStoppedRef.current) break; // Check in inner loop
                         if (line.startsWith('data:')) {
                             const dataString = line.substring(5).trim();
                             try {
@@ -318,29 +368,37 @@ export default function Home() {
                                 if (data.type === 'chunk') {
                                     accumulatedResponse += data.content;
                                     sentenceBufferRef.current += data.content;
-                                    addMessageToHistory('ai', accumulatedResponse, false);
+                                    if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
 
-                                    // Sentence detection logic (same as before)
+                                    // Sentence detection logic (Updated check)
                                     const sentences = sentenceBufferRef.current.split(SENTENCE_END_REGEX);
                                     if (sentences.length > 1) {
+                                        let sentencesToQueue : string[] = [];
                                         for (let i = 0; i < sentences.length - 1; i++) {
                                             const sentence = sentences[i].trim();
                                             const delimiter = sentences[i+1]?.match(/^\s*([.?!])\s*/)?.[1];
                                             if (sentence) {
-                                                enqueueTtsRequest(sentence + (delimiter || '')); 
+                                                sentencesToQueue.push(sentence + (delimiter || ''));
                                             }
                                             i++; 
                                         }
+                                        // Update buffer before enqueueing
                                         sentenceBufferRef.current = sentences[sentences.length - 1];
+                                        // Enqueue only if not stopped
+                                        if (!isStoppedRef.current) {
+                                            sentencesToQueue.forEach(s => enqueueTtsRequest(s));
+                                        }
                                     }
                                     
                                 } else if (data.type === 'error') {
                                     console.error('Stream error message:', data.content);
-                                    setErrorMessage(data.content || 'An error occurred during streaming.');
-                                    setIsProcessing(false);
-                                    setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+                                    if (!isStoppedRef.current) {
+                                        setErrorMessage(data.content || 'An error occurred during streaming.');
+                                        setIsProcessing(false);
+                                        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+                                    }
                                     // Stop reading the stream on server error
-                                    if (readerRef.current) readerRef.current.cancel();
+                                    if (readerRef.current) readerRef.current.cancel('Stream error received');
                                     abortControllerRef.current?.abort(); // Abort fetch
                                     break; // Exit inner loop
                                 } else if (data.type === 'done') {
@@ -349,50 +407,59 @@ export default function Home() {
                                    // Final processing is handled in the main loop's done check
                                 }
                             } catch (parseError) {
-                                console.warn('Could not parse stream data chunk:', dataString, parseError);
+                                if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
                             }
                         }
                     }
+                    if (isStoppedRef.current) break; // Check after processing lines
                 } catch (streamReadError) {
-                    if (abortControllerRef.current?.signal.aborted) {
-                         console.log('Stream reading aborted.');
-                    } else {
+                    // Handle errors only if not deliberately stopped/aborted
+                    if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
                         console.error('Error reading stream:', streamReadError);
                         setErrorMessage('Connection lost during response.');
                         setIsProcessing(false);
                         setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+                    } else {
+                        console.log('Stream reading aborted or stopped.');
                     }
-                    break; // Exit loop on error or abort
+                    break; // Exit loop on error or abort/stop
                 }
             } // end while
             
             // Cleanup reader ref
             readerRef.current = null;
-            if (!abortControllerRef.current?.signal.aborted) {
+            if (!abortControllerRef.current?.signal.aborted && !isStoppedRef.current) {
                 abortControllerRef.current = null; // Clear controller if finished naturally
+            }
+            // If the loop finished but we were stopped, ensure processing state is false
+            if (isStoppedRef.current) {
+                setIsProcessing(false);
             }
         };
         
         processStream(); // Start processing the stream asynchronously
 
     } catch (error) {
-        console.error('Failed to initiate fetch stream:', error);
-        let message = 'Failed to connect to the AI.';
-        if (error instanceof Error && error.name !== 'AbortError') {
-            message = error.message;
+        // Handle errors only if not deliberately stopped/aborted
+        if (!(error instanceof Error && error.name === 'AbortError') && !isStoppedRef.current) {
+            console.error('Failed to initiate fetch stream:', error);
+            setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to the AI.');
+            setIsProcessing(false);
+            setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
+        } else {
+            console.log("Fetch initiation aborted or stopped.");
+            setIsProcessing(false); // Ensure state is reset if aborted early
         }
-        if (!(error instanceof Error && error.name === 'AbortError')) {
-            setErrorMessage(message);
-        }
-        setIsProcessing(false);
-        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
-        abortControllerRef.current = null; // Clear controller on fetch error
+        abortControllerRef.current = null; // Clear controller on fetch error/abort
     }
   };
 
-  // --- Stop Speaking Handler (Updated to include fetch abort) ---
-  const handleStopSpeaking = useCallback(async () => { // Make async if needed for cleanup
-    console.log("Stop Speaking button clicked. Halting audio, queues, and fetch.");
+  // --- Stop Speaking Handler (Updated with stop flag and onended=null) ---
+  const handleStopSpeaking = useCallback(async () => { // Make async for potential await on cancel
+    if (isStoppedRef.current) return; // Avoid running stop logic multiple times if already stopped
+
+    isStoppedRef.current = true; // Set stop flag immediately
+    console.log("Stop Speaking requested. Halting audio, queues, and fetch.");
 
     // 1. Abort the fetch request if active
     if (abortControllerRef.current) {
@@ -403,7 +470,7 @@ export default function Home() {
     // Cancel any pending read on the stream reader
     if (readerRef.current) {
        try {
-          await readerRef.current.cancel();
+          await readerRef.current.cancel('User stopped'); // Pass reason for cancellation
           console.log("Cancelled stream reader.");
        } catch (cancelError) {
           console.warn("Error cancelling stream reader:", cancelError);
@@ -413,11 +480,13 @@ export default function Home() {
 
     // 2. Stop the currently playing audio source node
     if (currentAudioSourceRef.current) {
+      currentAudioSourceRef.current.onended = null; // Prevent onended from firing
       try {
         currentAudioSourceRef.current.stop();
         console.log("Stopped current audio source node.");
       } catch (e) {
-        console.warn("Error stopping audio source (might have already finished):", e);
+        // Ignore errors often caused by stopping already stopped/finished node
+        // console.warn("Error stopping audio source (might have already finished):", e);
       }
       currentAudioSourceRef.current = null;
     }
@@ -433,14 +502,14 @@ export default function Home() {
 
     // 5. Reset state variables
     setIsSpeaking(false);
-    setIsProcessing(false); // Ensure overall processing stops
+    setIsProcessing(false); // Ensure overall processing stops immediately
     
     // 6. Reset sentence buffer
     sentenceBufferRef.current = '';
 
     setErrorMessage(''); // Clear any transient errors
 
-  }, []); // Dependencies remain minimal
+  }, []); // Dependencies remain minimal as it uses refs primarily
 
   return (
     <div className="container full-page-layout">
@@ -460,6 +529,7 @@ export default function Home() {
             onResult={handleQuestionSubmit} 
             isListening={isListening}
             setIsListening={setIsListening}
+            disabled={isProcessing || isSpeaking}
           />
           {/* --- End Render Simplified Voice Button --- */}
 
@@ -467,7 +537,6 @@ export default function Home() {
           <button 
               className="control-button stop-speaking-button" 
               onClick={handleStopSpeaking}
-              // Disable if not processing text OR speaking audio
               disabled={!isProcessing && !isSpeaking} 
               aria-label="Stop" 
           >
@@ -497,7 +566,7 @@ export default function Home() {
               </div>
             ))}
             {/* Show loading dots only while text stream is active */}
-            {isProcessing && conversationHistory[conversationHistory.length - 1]?.type === 'ai' && (
+            {(isProcessing || (isSpeaking && conversationHistory[conversationHistory.length - 1]?.type === 'ai')) && (
                 <div className="chat-message ai loading-dots">
                     <span></span><span></span><span></span>
                 </div>
