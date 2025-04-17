@@ -268,178 +268,8 @@ export default function Home() {
   }, []); // Dependencies updated as needed
 
 
-  // --- Handle Text Stream (Two-Chunk Approach) ---
-  const handleQuestionSubmit = async (text: string) => {
-    if (!text || text.trim() === '') return;
-    
-    console.log('Submitting question via POST:', text);
-    
-    // --- Step 1: Stop any ongoing process COMPLETELY --- 
-    await handleStopSpeaking(); 
-    
-    // --- Step 2: Reset the stop flag for the NEW request --- 
-    isStoppedRef.current = false; // <<< Reset stop flag HERE
-    
-    // --- Step 3: Set up state for the new request --- 
-    addMessageToHistory('user', text);
-    setIsProcessing(true); // Start processing
-    setIsSpeaking(false); // Not speaking yet
-    setErrorMessage('');
-    sentenceBufferRef.current = '';
-    
-    // Add placeholder for AI response
-    addMessageToHistory('ai', '', false);
-
-    // Abort previous fetch controller just in case (belt and suspenders)
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-    
-    // --- Step 4: Initiate the new fetch request --- 
-    let accumulatedResponse = '';
-    let firstChunkProcessed = false; // <<< Flag to track if first short sentence was sent
-    let remainingTextBuffer = ''; // <<< Buffer for the second large chunk
-
-    try {
-        const response = await fetch('/api/ask', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                question: text,
-                conversationHistory: conversationHistory // Send the history
-            }),
-            signal: abortControllerRef.current.signal // Allow aborting
-        });
-
-        if (!response.ok) {
-            let errorMsg = `Error fetching stream: ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.error || errorMsg;
-            } catch { /* ignore */ }
-            throw new Error(errorMsg);
-        }
-
-        if (!response.body) {
-            throw new Error('Response body is null');
-        }
-
-        if (isStoppedRef.current) return; // Check after fetch initiated
-
-        readerRef.current = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        // Function to process the stream
-        const processStream = async () => {
-            while (true) {
-                if (isStoppedRef.current) { // Check stop flag in loop
-                    console.log("Stream processing loop: Stop requested.");
-                    break;
-                }
-                try {
-                    const { done, value } = await readerRef.current!.read();
-                    
-                    if (isStoppedRef.current) break;
-                    
-                    if (done) {
-                        console.log('Fetch stream finished.');
-                        // --- Send the accumulated remaining text --- 
-                        if (!isStoppedRef.current && remainingTextBuffer.trim()) {
-                            console.log(`Stream done. Enqueueing final chunk (length: ${remainingTextBuffer.length})`);
-                            enqueueTtsRequest(remainingTextBuffer.trim());
-                        }
-                        // --- End send remaining text --- 
-                        remainingTextBuffer = ''; // Clear buffer
-                        if (!isStoppedRef.current) setIsProcessing(false); 
-                        break; // Exit loop
-                    }
-                    
-                    const chunkText = decoder.decode(value, { stream: true });
-                    accumulatedResponse += chunkText;
-                    if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
-                    
-                    // --- Process First Chunk Differently --- 
-                    if (!firstChunkProcessed) {
-                       // Try to find the first sentence or ~10 words
-                       const match = accumulatedResponse.match(/^([^.?!]+[.?!]?\s*)/); // Match first sentence
-                       let firstPart = '';
-                       if (match && match[0].length > 0) {
-                          firstPart = match[0].trim();
-                          // Simple word count check (approximate)
-                          if (firstPart.split(/\s+/).length > 15) { // If first sentence is long, take ~10 words
-                              firstPart = firstPart.split(/\s+/).slice(0, 10).join(' ') + '...'; 
-                          }
-                          remainingTextBuffer = accumulatedResponse.substring(firstPart.length).trimStart(); // Store the rest
-                       } else { 
-                          // If no sentence end found yet, take first ~10 words if available
-                          const words = accumulatedResponse.split(/\s+/);
-                          if (words.length > 10) {
-                             firstPart = words.slice(0, 10).join(' ') + '...';
-                             remainingTextBuffer = accumulatedResponse.substring(firstPart.length).trimStart();
-                          } else {
-                             // Not enough text yet for first chunk, just buffer it all
-                             remainingTextBuffer = accumulatedResponse;
-                             // Don't set firstChunkProcessed = true yet
-                             continue; // Wait for more text
-                          }
-                       }
-
-                       if (firstPart && !isStoppedRef.current) {
-                          console.log(`Sending first short chunk: "${firstPart}"`);
-                          enqueueTtsRequest(firstPart); 
-                          firstChunkProcessed = true; // Mark as processed
-                       }
-                    } else {
-                       // After first chunk, just append to the remaining buffer
-                       remainingTextBuffer += chunkText;
-                    }
-                    // --- End Process First Chunk --- 
-                    
-                } catch (streamReadError) {
-                    // Handle errors only if not deliberately stopped/aborted
-                    if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
-                        console.error('Error reading stream:', streamReadError);
-                        setErrorMessage('Connection lost during response.');
-                        setIsProcessing(false);
-                        setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
-                    } else {
-                        console.log('Stream reading aborted or stopped.');
-                    }
-                    break; // Exit loop on error or abort/stop
-                }
-            } // end while
-            
-            // Cleanup reader ref
-            readerRef.current = null;
-            if (!abortControllerRef.current?.signal.aborted && !isStoppedRef.current) {
-                abortControllerRef.current = null; // Clear controller if finished naturally
-            }
-            // If the loop finished but we were stopped, ensure processing state is false
-            if (isStoppedRef.current) {
-                setIsProcessing(false);
-            }
-        };
-        
-        processStream(); // Start processing the stream asynchronously
-
-    } catch (error) {
-        // Handle errors only if not deliberately stopped/aborted
-        if (!(error instanceof Error && error.name === 'AbortError') && !isStoppedRef.current) {
-            console.error('Failed to initiate fetch stream:', error);
-            setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to the AI.');
-            setIsProcessing(false);
-            setConversationHistory(prev => prev.filter((msg) => !(msg.type === 'ai' && msg.text === '')));
-        } else {
-            console.log("Fetch initiation aborted or stopped.");
-            setIsProcessing(false); // Ensure state is reset if aborted early
-        }
-        abortControllerRef.current = null; // Clear controller on fetch error/abort
-    }
-  };
-
-  // --- Stop Speaking Handler (Updated with stop flag and onended=null) ---
-  const handleStopSpeaking = useCallback(async () => { // Make async for potential await on cancel
+  // --- Define handleStopSpeaking with useCallback ---
+  const handleStopSpeaking = useCallback(async () => {
     if (isStoppedRef.current) return; // Avoid running stop logic multiple times if already stopped
 
     isStoppedRef.current = true; // Set stop flag immediately
@@ -493,7 +323,192 @@ export default function Home() {
 
     setErrorMessage(''); // Clear any transient errors
 
-  }, []); // Dependencies remain minimal as it uses refs primarily
+  }, []); // Keep dependencies minimal
+
+  // --- Handle Text Stream (Corrected Structure v3) ---
+  const handleQuestionSubmit = async (text: string) => {
+    if (!text || text.trim() === '') return;
+    console.log('Submitting question via POST:', text);
+
+    // Step 1: Stop ongoing process
+    await handleStopSpeaking();
+
+    // Step 2: Reset stop flag for new request
+    isStoppedRef.current = false;
+
+    // Step 3: Setup state
+    addMessageToHistory('user', text);
+    setIsProcessing(true);
+    setIsSpeaking(false);
+    setErrorMessage('');
+    // sentenceBufferRef.current = ''; // sentenceBufferRef is not used in this version
+    addMessageToHistory('ai', '', false); // Placeholder
+
+    // Abort controller setup
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+
+    // Define variables needed for stream processing
+    let accumulatedResponse = ''; // For display
+    let firstChunkProcessed = false;
+    let remainingTextBuffer = ''; // For second TTS request
+    let sseBuffer = ''; // Buffer specifically for SSE message lines
+
+    // --- Define processSseBuffer helper function HERE (before main try block) ---
+    const processSseBuffer = (): void => {
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() || ''; // Keep the last potentially incomplete line
+
+        for (const line of lines) {
+            if (isStoppedRef.current) break;
+
+            if (line.startsWith('data:')) {
+                const dataString = line.substring(5).trim();
+                if (dataString === '[DONE]') continue;
+                try {
+                    const data = JSON.parse(dataString);
+
+                    if (data.type === 'chunk' && data.content) {
+                        const contentChunk = data.content;
+                        accumulatedResponse += contentChunk;
+                        if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
+
+                        // Apply Two-Chunk Logic
+                        if (!firstChunkProcessed) {
+                            let tempBufferForFirstChunk = remainingTextBuffer + contentChunk;
+                            let firstPart = '';
+                            const match = tempBufferForFirstChunk.match(/^([^.?!]+[.?!]?\s*)/);
+                            if (match && match[0].length > 0) {
+                                firstPart = match[0].trim();
+                                if (firstPart.split(/\s+/).length > 15) {
+                                    firstPart = firstPart.split(/\s+/).slice(0, 10).join(' ') + '...';
+                                }
+                                remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
+                            } else {
+                                const words = tempBufferForFirstChunk.split(/\s+/);
+                                if (words.length >= 10) {
+                                    firstPart = words.slice(0, 10).join(' ') + '...';
+                                    remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
+                                } else {
+                                    remainingTextBuffer = tempBufferForFirstChunk;
+                                    continue; // Not enough text yet
+                                }
+                            }
+
+                            if (firstPart && !isStoppedRef.current) {
+                                console.log(`Sending first short chunk: "${firstPart}"`);
+                                enqueueTtsRequest(firstPart);
+                                firstChunkProcessed = true;
+                            }
+                        } else {
+                            remainingTextBuffer += contentChunk;
+                        }
+                    } else if (data.type === 'error') {
+                         if (!isStoppedRef.current) { 
+                             setErrorMessage(data.content || 'Stream error');
+                             setIsProcessing(false);
+                             setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+                         }
+                         if (readerRef.current) readerRef.current.cancel('Stream error received').catch(()=>{});
+                         abortControllerRef.current?.abort();
+                         break;
+                    }
+                } catch (parseError) {
+                    if (!isStoppedRef.current) console.warn('Could not parse stream data chunk:', dataString, parseError);
+                }
+            }
+        } // end for lines
+    }; // --- End processSseBuffer definition ---
+
+    // --- Step 4: Main try block for fetch and stream reading ---
+    try {
+        const response = await fetch('/api/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                question: text,
+                conversationHistory: conversationHistory
+            }),
+            signal: abortControllerRef.current.signal
+        });
+
+        if (isStoppedRef.current) return;
+        if (!response.ok) {
+            let errorMsg = `Error fetching stream: ${response.status}`;
+            try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch { /* ignore */ }
+            throw new Error(errorMsg);
+        }
+        if (!response.body) throw new Error('Response body is null');
+
+        readerRef.current = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        // Stream reading loop
+        while (true) {
+            if (isStoppedRef.current) break;
+            try { // Inner try for reader.read()
+                const { done, value } = await readerRef.current!.read();
+                if (isStoppedRef.current) break;
+
+                if (done) {
+                    console.log('Fetch stream finished.');
+                    sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
+                    processSseBuffer(); // Process final buffer part
+
+                    // Send final remaining text
+                    if (!isStoppedRef.current && remainingTextBuffer.trim()) {
+                        console.log(`Stream done. Enqueueing final chunk (length: ${remainingTextBuffer.length})`);
+                        enqueueTtsRequest(remainingTextBuffer.trim());
+                    }
+                    remainingTextBuffer = '';
+                    if (!isStoppedRef.current) setIsProcessing(false);
+                    break; // Exit loop
+                }
+
+                // Add incoming data and process buffer
+                sseBuffer += decoder.decode(value, { stream: true });
+                processSseBuffer(); // Process buffer after adding data
+
+            } catch (streamReadError) { // Catch for reader.read()
+                 if (!(streamReadError instanceof Error && streamReadError.name === 'AbortError') && !isStoppedRef.current) {
+                     console.error('Error reading stream:', streamReadError);
+                     setErrorMessage('Connection lost during response.');
+                     setIsProcessing(false);
+                     setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+                 } else {
+                     console.log('Stream reading aborted or stopped.');
+                 }
+                 break; // Exit loop on error or abort/stop
+            }
+        } // end while
+
+        // Cleanup after loop finishes naturally or via break
+        readerRef.current = null;
+        if (!abortControllerRef.current?.signal.aborted && !isStoppedRef.current) {
+             abortControllerRef.current = null;
+        }
+        if (isStoppedRef.current) { // Ensure processing stops if loop was exited by stop flag
+            setIsProcessing(false);
+        }
+
+    // --- End of main try block ---
+    } catch (error) { // Catch for fetch() or setup errors
+         if (!(error instanceof Error && error.name === 'AbortError') && !isStoppedRef.current) {
+             console.error('Failed to initiate fetch stream or response error:', error);
+             setErrorMessage(error instanceof Error ? error.message : 'Failed to connect to the AI.');
+             setIsProcessing(false);
+             setConversationHistory(prev => prev.filter(msg => !(msg.type === 'ai' && msg.text === '')));
+         } else {
+             console.log("Fetch initiation aborted or stopped.");
+             setIsProcessing(false);
+         }
+         abortControllerRef.current = null; // Clear controller on any outer error/abort
+    }
+    // --- End of outer catch block ---
+
+  }; // --- End handleQuestionSubmit --- 
 
   return (
     <div className="container full-page-layout">
