@@ -44,7 +44,24 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContextRef.current) {
        try {
+         // Create context but don't resume yet
          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+         
+         // For iOS, we'll resume on first user interaction
+         const resumeAudioContext = async () => {
+           if (audioContextRef.current?.state === 'suspended') {
+             await audioContextRef.current.resume();
+             console.log('AudioContext resumed successfully');
+           }
+           // Remove the event listener after first interaction
+           document.removeEventListener('touchstart', resumeAudioContext);
+           document.removeEventListener('click', resumeAudioContext);
+         };
+
+         // Add listeners for both touch and click
+         document.addEventListener('touchstart', resumeAudioContext);
+         document.addEventListener('click', resumeAudioContext);
+         
          console.log('AudioContext initialized for playback.');
        } catch (err) {
          console.error('Error initializing AudioContext:', err);
