@@ -12,10 +12,10 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   const isMountedRef = useRef(true);
   // Refs for audio processing
   const audioContextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const audioChunksRef = useRef<Float32Array[]>([]); 
-  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null); // Ref for source node
-  const isListeningRef = useRef(isListening); // Ref to track listening state reliably in callbacks
+  const processorRef = useRef<AudioWorkletNode | ScriptProcessorNode | null>(null);
+  const audioChunksRef = useRef<Float32Array[]>([]);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const isListeningRef = useRef(false);
 
   // Keep isListeningRef synced with the isListening prop/state
   useEffect(() => {
@@ -25,30 +25,36 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   // Helper function for cleanup (wrapped in useCallback)
   const cleanupAudioResources = useCallback(() => {
     console.log("Cleaning up audio resources...");
-    // Disconnect nodes first
+    
+    // Disconnect and cleanup processor
     if (processorRef.current) {
+      if ('port' in processorRef.current) {
+        // AudioWorkletNode
+        processorRef.current.port.close();
+      } else {
+        // ScriptProcessorNode
+        processorRef.current.onaudioprocess = null;
+      }
       processorRef.current.disconnect();
-      processorRef.current.onaudioprocess = null; // Remove handler
       processorRef.current = null;
     }
+    
+    // Disconnect source
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
     }
-
+    
     // Stop media tracks
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
       console.log("Media stream stopped.");
     }
-
-    // Optional: Close audio context - decided against closing automatically to allow reuse
-    // if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-    //   audioContextRef.current.close().then(() => console.log("Audio context closed."));
-    //   audioContextRef.current = null; 
-    // }
-  }, []); // No dependencies as it only interacts with refs
+    
+    // Clear audio chunks
+    audioChunksRef.current = [];
+  }, []);
 
   // Convert to WAV function (wrapped in useCallback)
   const convertToWav = useCallback((chunks: Float32Array[]): Blob => {
@@ -300,7 +306,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       try {
         // Register the worklet processor
         await audioContext.audioWorklet.addModule('/audio-processor.js');
-        processorRef.current = new AudioWorkletNode(audioContext, 'audio-processor', {
+        const workletNode = new AudioWorkletNode(audioContext, 'audio-processor', {
           numberOfInputs: 1,
           numberOfOutputs: 1,
           processorOptions: {
@@ -309,26 +315,34 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         });
         
         // Handle messages from the worklet
-        processorRef.current.port.onmessage = (event) => {
+        workletNode.port.onmessage = (event: MessageEvent) => {
           if (isListeningRef.current) {
             audioChunksRef.current.push(new Float32Array(event.data));
           }
         };
+        
+        processorRef.current = workletNode;
       } catch (err) {
         console.warn('AudioWorklet not supported, falling back to ScriptProcessorNode');
         // Fallback to ScriptProcessorNode if AudioWorklet is not supported
-        processorRef.current = audioContext.createScriptProcessor(4096, 1, 1);
-        processorRef.current.onaudioprocess = (e) => {
+        const scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+        scriptNode.onaudioprocess = (e: AudioProcessingEvent) => {
           if (isListeningRef.current) {
             const inputData = e.inputBuffer.getChannelData(0);
             audioChunksRef.current.push(new Float32Array(inputData));
           }
         };
+        
+        processorRef.current = scriptNode;
       }
       
       // Connect the nodes
-      sourceNodeRef.current.connect(processorRef.current);
-      processorRef.current.connect(audioContext.destination);
+      if (sourceNodeRef.current && processorRef.current) {
+        sourceNodeRef.current.connect(processorRef.current);
+        processorRef.current.connect(audioContext.destination);
+      } else {
+        throw new Error('Failed to create audio nodes');
+      }
       
       console.log("Audio nodes connected, starting recording...");
       setIsListening(true);
