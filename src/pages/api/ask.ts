@@ -53,8 +53,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              // model: 'deepseek/deepseek-chat:free', // Or choose another model
-              model: 'mistralai/mistral-7b-instruct:free', // Try Mistral 7B free tier
+              // model: 'mistralai/mistral-7b-instruct:free', // Reverting from Mistral
+              model: 'deepseek/deepseek-chat:free', // Reverting back to Deepseek Free
               messages: [
                 { role: 'system', content: createSystemPrompt() },
                 { role: 'user', content: formatUserQuestion(question) }

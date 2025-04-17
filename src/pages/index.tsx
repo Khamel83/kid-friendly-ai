@@ -21,9 +21,12 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Initialize AudioContext & Load History AFTER mount
+  // --- REMOVE SessionStorage Loading Effect --- 
+  // useEffect(() => { ... load logic ... }, []);
+  // --- End REMOVE --- 
+  
+  // --- Initialize AudioContext only --- 
   useEffect(() => {
-    // --- Audio Context Init --- 
     if (typeof window !== 'undefined' && !audioContextRef.current) {
        try {
          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -33,45 +36,19 @@ export default function Home() {
          setErrorMessage('Web Audio API is not available in this browser.');
        }
     }
-    // --- End Audio Context Init --- 
-    
-    // --- Load history from sessionStorage ONCE on client mount --- 
-    try {
-      const storedHistory = sessionStorage.getItem(SESSION_STORAGE_KEY);
-      if (storedHistory) {
-        setConversationHistory(JSON.parse(storedHistory));
-        console.log('Loaded conversation history from sessionStorage.');
-      }
-    } catch (error) {
-      console.error('Error reading conversation history from sessionStorage:', error);
-      // Keep the initial empty state if loading fails
-    }
-    // --- End Load history --- 
-    
-    // Cleanup audio source on unmount (keep this)
     return () => {
       if (sourceNodeRef.current) {
-        sourceNodeRef.current.stop();
-        sourceNodeRef.current.disconnect();
-        sourceNodeRef.current = null;
+         sourceNodeRef.current.stop();
+         sourceNodeRef.current.disconnect();
+         sourceNodeRef.current = null;
       }
     };
-  }, []); // Empty dependency array ensures this runs only once after mount
+  }, []); // Now only handles AudioContext and cleanup
+  // --- End Initialize AudioContext --- 
 
-  // Save history to sessionStorage on change (keep this)
-  useEffect(() => {
-    try {
-      // Only save if history is not the initial empty array
-      if (conversationHistory.length > 0) { 
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(conversationHistory));
-      } else {
-        // Clear storage if history becomes empty
-         sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      }
-    } catch (error) {
-      console.error('Error saving conversation history to sessionStorage:', error);
-    }
-  }, [conversationHistory]);
+  // --- REMOVE SessionStorage Saving Effect --- 
+  // useEffect(() => { ... save logic ... }, [conversationHistory]);
+  // --- End REMOVE --- 
 
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string) => {
     // --- Modify to handle partial AI message update ---
