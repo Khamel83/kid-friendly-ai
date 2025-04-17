@@ -70,8 +70,8 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     }
 
     if (totalLength === 0) {
-        console.error("Cannot convert to WAV: No audio data provided.");
-        return new Blob([new ArrayBuffer(44)], { type: 'audio/wav' }); 
+      console.error("Cannot convert to WAV: No audio data provided.");
+      return new Blob([new ArrayBuffer(44)], { type: 'audio/wav' }); 
     }
 
     // Ensure audio length is optimal for Whisper (pad or trim to 30 seconds)
@@ -97,6 +97,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     const bytesPerSample = bitDepth / 8;
     const blockAlign = numChannels * bytesPerSample;
     const byteRate = sampleRate * blockAlign;
+    const dataLength = targetLength * bytesPerSample;
     
     // Create WAV header buffer
     const wavHeader = new ArrayBuffer(44);
@@ -105,7 +106,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     // Write WAV header
     // RIFF chunk descriptor
     view.setUint32(0, 0x46464952, true); // "RIFF"
-    view.setUint32(4, 36 + targetLength * bytesPerSample, true); // file length
+    view.setUint32(4, 36 + dataLength, true); // file length
     view.setUint32(8, 0x45564157, true); // "WAVE"
     
     // fmt sub-chunk
@@ -120,7 +121,7 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     
     // data sub-chunk
     view.setUint32(36, 0x61746164, true); // "data"
-    view.setUint32(40, targetLength * bytesPerSample, true); // data length
+    view.setUint32(40, dataLength, true); // data length
     
     // Convert Float32 data to 16-bit PCM
     const pcmData = new Int16Array(targetLength);
