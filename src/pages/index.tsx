@@ -268,14 +268,19 @@ export default function Home() {
   }, []); // Dependencies updated as needed
 
 
-  // --- Handle Text Stream (Updated with stop check) ---
+  // --- Handle Text Stream (Ensure stop flag reset) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     
     console.log('Submitting question via POST:', text);
-    await handleStopSpeaking(); // Stop any ongoing process first
-    isStoppedRef.current = false; // Reset stop flag for new request
     
+    // --- Step 1: Stop any ongoing process COMPLETELY --- 
+    await handleStopSpeaking(); 
+    
+    // --- Step 2: Reset the stop flag for the NEW request --- 
+    isStoppedRef.current = false; // <<< Reset stop flag HERE
+    
+    // --- Step 3: Set up state for the new request --- 
     addMessageToHistory('user', text);
     setIsProcessing(true); // Start processing
     setIsSpeaking(false); // Not speaking yet
@@ -285,14 +290,14 @@ export default function Home() {
     // Add placeholder for AI response
     addMessageToHistory('ai', '', false);
 
-    // Abort previous fetch if any
+    // Abort previous fetch controller just in case (belt and suspenders)
     if (abortControllerRef.current) {
         abortControllerRef.current.abort();
     }
     abortControllerRef.current = new AbortController();
     
+    // --- Step 4: Initiate the new fetch request --- 
     let accumulatedResponse = '';
-
     try {
         const response = await fetch('/api/ask', {
             method: 'POST',
