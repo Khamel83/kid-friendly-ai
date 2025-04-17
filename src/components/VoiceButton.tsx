@@ -268,6 +268,12 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
 
   const startRecording = async () => {
     try {
+      // Cancel any ongoing speech synthesis
+      if (window.speechSynthesis && window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+        console.log("Cancelled ongoing speech synthesis.");
+      }
+
       setError(null);
       audioChunksRef.current = []; // Reset chunks
       
