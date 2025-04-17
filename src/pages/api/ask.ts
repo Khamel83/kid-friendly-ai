@@ -1,10 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createSystemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Ensure this is set
-});
+// Removed OpenAI import as it's no longer used here for chat
+// import OpenAI from 'openai'; 
 
 // Helper function to send SSE data
 function sendSse(res: NextApiResponse, id: string | number, data: object) {
@@ -13,91 +10,173 @@ function sendSse(res: NextApiResponse, id: string | number, data: object) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // --- Allow GET for EventSource --- 
-  if (req.method !== 'POST' && req.method !== 'GET') { 
+  if (req.method !== 'POST' && req.method !== 'GET') {
     res.setHeader('Allow', 'POST, GET');
     return res.status(405).json({ error: 'Method not allowed' });
   }
-  // --- End Allow GET --- 
 
   try {
-    // --- Get question from query param for GET, fallback to body for POST ---
     const question = (req.method === 'GET' ? req.query.question : req.body.question) as string;
-    // --- End Get question --- 
     
     if (!question || question.trim() === '') {
       return res.status(400).json({ error: 'Question is required' });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY; // Check if OpenAI key exists
+    // --- Use OpenRouter API Key --- 
+    const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
-      console.error('OpenAI API key is not configured');
+      console.error('OpenRouter API key is not configured');
       return res.status(500).json({ error: 'API key is not configured' });
     }
+    // --- End Use OpenRouter API Key --- 
 
-    console.log(`Sending streaming request to OpenAI for question: "${question.substring(0, 50)}..."`);
+    console.log(`Sending streaming request to OpenRouter for question: "${question.substring(0, 50)}..."`);
     
-    // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders(); // Flush headers immediately
+    res.flushHeaders(); 
 
-    const stream = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: createSystemPrompt() },
-        { role: "user", content: formatUserQuestion(question) },
-      ],
-      temperature: 0.7,
-      max_tokens: 300, 
-      stream: true, // <<< Enable streaming
-    });
+    let timeoutId: NodeJS.Timeout | undefined;
     
-    let messageId = 0;
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-          // Send each content chunk as an SSE event
-          sendSse(res, messageId++, { type: 'chunk', content });
+    // --- Main try block for fetch and stream processing ---
+    try {
+        const controller = new AbortController();
+        timeoutId = setTimeout(() => controller.abort(), 20000); 
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+              'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+              'X-Title': 'Kid-Friendly AI Assistant'
+            },
+            body: JSON.stringify({
+              // model: 'deepseek/deepseek-chat:free', // Or choose another model
+              model: 'mistralai/mistral-7b-instruct:free', // Try Mistral 7B free tier
+              messages: [
+                { role: 'system', content: createSystemPrompt() },
+                { role: 'user', content: formatUserQuestion(question) }
+              ],
+              temperature: 0.7,
+              max_tokens: 300,
+              stream: true, // Request streaming from OpenRouter
+            }),
+            signal: controller.signal // Pass the abort signal
+        });
+
+        clearTimeout(timeoutId);
+        timeoutId = undefined; 
+
+        if (!response.ok) {
+            // Handle non-OK initial response (e.g., 401, 429)
+            let errorMsg = `OpenRouter Error: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error?.message || errorMsg;
+            } catch (e) { /* Ignore JSON parse error */ }
+            console.error(errorMsg);
+            // Send error via SSE if possible
+            if (!res.headersSent) {
+                res.status(response.status).json({ error: errorMsg });
+            } else {
+                sendSse(res, 'error', { type: 'error', content: errorMsg });
+                res.end();
+            }
+            return; // Stop processing
+        }
+
+        if (!response.body) {
+            throw new Error('OpenRouter response body is null');
+        }
+
+        // Process the stream from OpenRouter (assuming OpenAI compatible format)
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let messageId = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                console.log('OpenRouter stream finished.');
+                break;
+            }
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process buffer line by line for SSE format
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const dataString = line.substring(5).trim();
+                    if (dataString === '[DONE]') {
+                        console.log('OpenRouter stream signaled [DONE]');
+                        // We will send our own 'done' event after the loop
+                        continue; 
+                    }
+                    try {
+                        const chunk = JSON.parse(dataString);
+                        const content = chunk.choices[0]?.delta?.content || '';
+                        if (content) {
+                            sendSse(res, messageId++, { type: 'chunk', content });
+                        }
+                        if (chunk.choices[0]?.finish_reason) {
+                           console.log('OpenRouter stream finish reason:', chunk.choices[0]?.finish_reason);
+                        }
+                    } catch (parseError) {
+                        console.warn('Could not parse OpenRouter stream data chunk:', dataString, parseError);
+                    }
+                }
+            }
+        }
+        
+        sendSse(res, messageId, { type: 'done' });
+        console.log('Finished sending SSE stream from /api/ask (OpenRouter)');
+
+    // --- This is the catch block for the *inner* try (fetch/stream) ---
+    } catch (innerError) {
+      if (timeoutId) {
+         clearTimeout(timeoutId);
       }
-      // Check for finish reason if needed (e.g., length, stop)
-      if (chunk.choices[0]?.finish_reason) {
-           console.log('OpenAI stream finished. Reason:', chunk.choices[0]?.finish_reason);
-           break; // Stop processing if OpenAI signals completion
-      }
+      // Re-throw the error to be caught by the outer catch block
+      throw innerError; 
     }
+    // --- End of inner try-catch ---
     
-    // Signal the end of the stream
-    sendSse(res, messageId, { type: 'done' });
-    res.end(); // End the response stream
-    console.log('Finished sending SSE stream from /api/ask');
+    // Ensure response ends if the try block completes successfully without ending itself
+    if (!res.writableEnded) { 
+      res.end();
+    }
 
+  // --- This is the catch block for the *outer* try (setup + inner block) ---
   } catch (error) {
-    console.error('Error in /api/ask streaming:', error);
+    console.error('Error in /api/ask handler (OpenRouter):', error);
     let errorMessage = 'An error occurred while processing your request';
-    let statusCode = 500;
 
-    if (error instanceof OpenAI.APIError) {
-      errorMessage = `OpenAI Error: ${error.message}`;
-      statusCode = error.status || 500;
-      console.error('OpenAI API Error details:', { status: error.status, message: error.message });
+    if (error instanceof Error && error.name === 'AbortError') {
+      errorMessage = 'The request to the AI provider timed out.';
+      console.error('OpenRouter API call timed out.');
     } else if (error instanceof Error) {
-        errorMessage = error.message; 
+        errorMessage = error.message;
     }
     
-    // If headers haven't been sent, try to send JSON error
+    // Error handling similar to before
     if (!res.headersSent) {
-        res.status(statusCode).json({ error: errorMessage });
+        res.status(500).json({ error: errorMessage });
     } else {
-        // If headers were sent, we can't change status code,
-        // just try to send an error event and end.
         try {
             sendSse(res, 'error', { type: 'error', content: errorMessage });
         } catch (sseError) {
              console.error("Failed to send SSE error event:", sseError);
         }
-        res.end();
+        if (!res.writableEnded) {
+             res.end();
+        }
     }
   }
+  // --- End of outer try-catch ---
 } 
