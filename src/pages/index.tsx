@@ -124,7 +124,7 @@ export default function Home() {
     }
   }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue (Stricter Initial Playback Trigger) ---
+  // --- Process TTS Request Queue (Reverted Initial Playback Trigger) ---
   const processTtsQueue = useCallback(async () => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("TTS Queue: Stop requested, exiting.");
@@ -189,18 +189,13 @@ export default function Home() {
         // Add buffer to playback queue
         audioPlaybackQueueRef.current.push(audioBuffer);
         
-        // --- Stricter Trigger: Use firstChunkProcessedRef --- 
-        // Only trigger if this is the FIRST chunk processed AND nothing is playing
-        if (!firstChunkProcessedRef.current && !isPlayingAudioSegmentRef.current) {
-           // Sanity check: Ensure queue isn't empty (should always be true if we just pushed)
-           if (audioPlaybackQueueRef.current.length > 0) { 
-               console.log("First chunk decoded & nothing playing, starting playback chain.");
-               playNextAudioChunk(); // Start the chain
-               // IMPORTANT: Do NOT set firstChunkProcessedRef here.
-               // It's set in processSseBuffer when the *text* chunk is identified.
-           }
+        // --- Reverted Trigger: Check queue length === 1 --- 
+        // Trigger playback if this is the first item added to the queue AND nothing is playing
+        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+           console.log("First playable audio chunk added to queue, starting playback chain.");
+           playNextAudioChunk(); // Start the chain
         }
-        // --- End Stricter Trigger --- 
+        // --- End Reverted Trigger --- 
 
     } catch (error) {
         if (!isStoppedRef.current) { // Only log/set error if not manually stopped
@@ -218,7 +213,7 @@ export default function Home() {
            setTimeout(processTtsQueue, 0); 
         }
     }
-  }, []); // Ensure useCallback dependencies are correct (incl. firstChunkProcessedRef)
+  }, []); // Dependencies are minimal here
 
 
   // --- Play Next Audio Chunk from Queue (No changes needed) ---
