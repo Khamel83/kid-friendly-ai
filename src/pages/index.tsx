@@ -398,11 +398,6 @@ export default function Home() {
                                if (firstPart && !isStoppedRef.current) {
                                    console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
                                    enqueueTtsRequest(firstPart); 
-                                   // Trigger Playback AFTER first chunk is enqueued
-                                   if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
-                                        console.log("First audio chunk enqueued, starting playback chain.");
-                                        playNextAudioChunk(); 
-                                   }
                                    firstChunkProcessed = true;
                                }
                             } else {
