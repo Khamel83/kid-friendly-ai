@@ -4,9 +4,12 @@ interface VoiceButtonProps {
   onResult: (text: string) => void;
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
+  isLoading: boolean;
+  isSpeaking: boolean;
+  onStopSpeaking: () => void;
 }
 
-export default function VoiceButton({ onResult, isListening, setIsListening }: VoiceButtonProps) {
+export default function VoiceButton({ onResult, isListening, setIsListening, isLoading, isSpeaking, onStopSpeaking }: VoiceButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
@@ -21,6 +24,18 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   useEffect(() => {
     isListeningRef.current = isListening;
   }, [isListening]);
+
+  // --- Add useEffect to clear local error if parent clears global error ---
+  // This might not be strictly necessary if parent also passes down the error message,
+  // but handles cases where parent clears the error externally.
+  useEffect(() => {
+    if (!isLoading && !isSpeaking && !isListening) {
+      // If the parent component is idle, clear local errors too
+      // This assumes the parent clears its own `errorMessage` prop
+      // setError(null); // Consider if this is needed based on parent state management
+    } 
+  }, [isLoading, isSpeaking, isListening]);
+  // --- End useEffect ---
 
   // Helper function for cleanup (wrapped in useCallback)
   const cleanupAudioResources = useCallback(() => {
@@ -217,6 +232,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
     const recordedChunks = [...audioChunksRef.current]; 
     audioChunksRef.current = []; // Clear chunks immediately after copying
 
+    // Clear local error when stopping successfully (before potential transcription errors)
+    setError(null); 
+
     cleanupAudioResources();
 
     // Process accumulated chunks
@@ -245,11 +263,9 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
       }
     } else {
       console.warn('No audio chunks recorded.');
-      if (!streamRef.current) {
-         setError('Failed to start recording. Check mic permissions.');
-      } else {
-         setError('No audio recorded. Please try again.');
-      }
+       // Don't set an error here if it stopped normally without chunks,
+       // let the parent handle status messages.
+       // setError('No audio recorded. Please try again.'); 
     }
   }, [setIsListening, cleanupAudioResources, convertToWav, transcribeAudio]);
 
@@ -267,15 +283,16 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
   }, [stopRecordingInternal]); // Dependency: stopRecordingInternal
 
   const startRecording = async () => {
-    // --- Clear previous errors --- 
-    setError(null); 
-    // --- End Clear previous errors --- 
+    setError(null); // Clear local error at the start
     try {
       // Cancel any ongoing speech synthesis
       if (window.speechSynthesis && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
         console.log("Cancelled ongoing speech synthesis.");
       }
+      // --- Also cancel our new audio playback --- 
+      onStopSpeaking(); // Call the stop speaking handler from parent
+      // --- End cancel audio playback --- 
 
       audioChunksRef.current = []; // Reset chunks
       
@@ -372,24 +389,51 @@ export default function VoiceButton({ onResult, isListening, setIsListening }: V
         }
       }
       
-      setError(message);
+      setError(message); // Set local error on failure
       setIsListening(false);
       cleanupAudioResources();
     }
   };
 
+  // --- Determine Button State --- 
+  let buttonState: 'idle' | 'listening' | 'loading' | 'speaking' = 'idle';
+  let buttonText = 'Talk';
+  // Make action type flexible
+  let buttonAction: () => void | Promise<void> = startRecording;
+  let isDisabled = false;
+
+  if (isListening) {
+    buttonState = 'listening';
+    buttonText = 'Stop';
+    buttonAction = stopRecordingInternal;
+  } else if (isLoading) {
+    buttonState = 'loading';
+    buttonText = 'Thinking...';
+    isDisabled = true; // Disable button while AI is thinking
+    buttonAction = () => {}; // No action when loading
+  } else if (isSpeaking) {
+    buttonState = 'speaking';
+    buttonText = 'Stop Speaking';
+    buttonAction = onStopSpeaking; // Action is to stop the TTS
+  } 
+  // --- End Determine Button State --- 
 
   return (
     <div className="voice-button-container">
       <button 
-        className={`voice-button ${isListening ? 'listening' : 'idle'}`}
-        onClick={isListening ? stopRecordingInternal : startRecording} 
-        aria-label={isListening ? "Stop talking" : "Start talking"}
+        className={`voice-button ${buttonState}`}
+        // Cast action to simple () => void for onClick handler type
+        onClick={buttonAction as () => void} 
+        disabled={isDisabled} // Use the disabled state
+        aria-label={buttonText} // Use dynamic text for accessibility
       >
-        {isListening ? 'Stop' : 'Talk'}
-        {isListening && <div className="pulse-ring animate"></div>}
+        {buttonText} {/* Display dynamic text */} 
+        {isListening && <div className="pulse-ring animate"></div>} {/* Keep pulse only when listening */}
+        {/* Add loading indicator maybe? */}
+        {isLoading && <div className="loading-spinner"></div>}
       </button>
       
+      {/* Display local component errors (like mic permission) */} 
       {error && <p className="error-message">{error}</p>}
     </div>
   );

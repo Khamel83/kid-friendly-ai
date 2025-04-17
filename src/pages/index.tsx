@@ -209,21 +209,15 @@ export default function Home() {
               onResult={handleQuestionSubmit} 
               isListening={isListening}
               setIsListening={setIsListening}
+              isLoading={isLoading} 
+              isSpeaking={isSpeaking}
+              onStopSpeaking={handleStopSpeaking}
             />
           
             {errorMessage && (
               <div className="error-container">
                 <p>{errorMessage}</p>
               </div>
-            )}
-
-            {isSpeaking && (
-                <button 
-                    className="stop-button" 
-                    onClick={handleStopSpeaking}
-                >
-                    Stop Speaking
-                </button>
             )}
           </div>
 
