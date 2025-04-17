@@ -117,7 +117,7 @@ export default function Home() {
     }
   }, []); // Dependency array might need state setters if used directly
 
-  // --- Process TTS Request Queue (Refined Playback Trigger) ---
+  // --- Process TTS Request Queue (Simplified: Only Enqueue) ---
   const processTtsQueue = useCallback(async () => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("TTS Queue: Stop requested, exiting.");
@@ -179,15 +179,9 @@ export default function Home() {
         
         console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
         
-        // Add buffer to playback queue
+        // --- Only add buffer to playback queue --- 
         audioPlaybackQueueRef.current.push(audioBuffer);
-        
-        // --- Trigger playback ONLY if this is the first item added AND nothing is playing --- 
-        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
-           console.log("First audio chunk received, starting playback chain.");
-           playNextAudioChunk(); 
-        }
-        // --- End Refined Playback Trigger --- 
+        // --- REMOVED check and call to playNextAudioChunk --- 
 
     } catch (error) {
         if (!isStoppedRef.current) { // Only log/set error if not manually stopped
@@ -208,7 +202,7 @@ export default function Home() {
   }, []); // Dependencies: Needs access to state setters if used directly
 
 
-  // --- Play Next Audio Chunk from Queue (Using direct recursion) ---
+  // --- Play Next Audio Chunk from Queue (No changes needed) ---
   const playNextAudioChunk = useCallback(() => {
     if (isStoppedRef.current) { // Check stop flag
         console.log("Playback Queue: Stop requested, exiting.");
@@ -325,7 +319,7 @@ export default function Home() {
 
   }, []); // Keep dependencies minimal
 
-  // --- Handle Text Stream (Revised Two-Chunk - Min Word Count) ---
+  // --- Handle Text Stream (Revised First Chunk Trigger & Final History) ---
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
     console.log('Submitting question via POST:', text);
@@ -350,7 +344,6 @@ export default function Home() {
     }
     abortControllerRef.current = new AbortController();
 
-    // Define variables needed for stream processing
     let accumulatedResponse = ''; // For display
     let firstChunkProcessed = false; 
     let remainingTextBuffer = ''; // For second TTS request
@@ -374,45 +367,37 @@ export default function Home() {
                         accumulatedResponse += contentChunk;
                         if (!isStoppedRef.current) addMessageToHistory('ai', accumulatedResponse, false);
 
-                        // --- Apply Revised Two-Chunk Logic --- 
+                        // Apply Two-Chunk Logic
                         if (!firstChunkProcessed) {
-                            // Append current chunk to the temporary buffer used for threshold check
                             let tempBufferForFirstChunk = remainingTextBuffer + contentChunk;
                             let firstPart = '';
                             const words = tempBufferForFirstChunk.trim().split(/\s+/);
-                            const wordCount = words[0] === '' ? 0 : words.length; // Handle empty string case
-                            
-                            // --- Check if we have enough words for the first chunk --- 
+                            const wordCount = words[0] === '' ? 0 : words.length;
                             const MIN_WORDS_FOR_FIRST_CHUNK = 8;
-                            const TARGET_WORDS_FOR_FIRST_CHUNK = 10; // Approx target length
+                            const TARGET_WORDS_FOR_FIRST_CHUNK = 10;
 
                             if (wordCount >= MIN_WORDS_FOR_FIRST_CHUNK) {
-                               // We have enough words, define the first part
                                firstPart = words.slice(0, TARGET_WORDS_FOR_FIRST_CHUNK).join(' ');
-                               // Need to calculate remaining based on actual firstPart length relative to tempBuffer
-                               // Find where firstPart ends in tempBuffer (tricky with partial words/punctuation)
-                               // Safer: just keep the part of the *current* chunk that wasn't used in the first part
                                remainingTextBuffer = tempBufferForFirstChunk.substring(firstPart.length).trimStart();
                                
                                if (firstPart && !isStoppedRef.current) {
                                    console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
                                    enqueueTtsRequest(firstPart); 
-                                   firstChunkProcessed = true; // Mark as processed
+                                   // Trigger Playback AFTER first chunk is enqueued
+                                   if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+                                        console.log("First audio chunk enqueued, starting playback chain.");
+                                        playNextAudioChunk(); 
+                                   }
+                                   firstChunkProcessed = true;
                                }
                             } else {
-                               // Not enough words yet, keep buffering the whole chunk for next time
                                remainingTextBuffer = tempBufferForFirstChunk;
                                console.log(`Buffering for first chunk. Words: ${wordCount}/${MIN_WORDS_FOR_FIRST_CHUNK}`);
-                               continue; // Continue to next line/chunk iteration
+                               continue; 
                             }
-                            // --- End Word Count Check --- 
-                            
                         } else {
-                            // After first chunk sent, append all new content to the remaining buffer
                             remainingTextBuffer += contentChunk;
                         }
-                        // --- End Revised Two-Chunk Logic ---
-
                     } else if (data.type === 'error') {
                          if (!isStoppedRef.current) { 
                              setErrorMessage(data.content || 'Stream error');
@@ -462,17 +447,16 @@ export default function Home() {
 
                 if (done) {
                     console.log('Fetch stream finished.');
-                    // Process final part of buffer
                     sseBuffer += decoder.decode(undefined, { stream: false }); // Flush decoder
                     processSseBuffer(); // Process final buffer part
 
-                    // --- Add Final History Update --- 
+                    // --- Add Final History Update (Unconditional) --- 
                     if (!isStoppedRef.current && accumulatedResponse) {
-                        console.log('Updating history with final complete AI message.');
-                        addMessageToHistory('ai', accumulatedResponse, true); // Mark as complete
+                         console.log('Updating history with final complete AI message.');
+                         addMessageToHistory('ai', accumulatedResponse, true); // Mark as complete
                     }
                     // --- End Final History Update ---
-                    
+
                     // Send final remaining text for TTS
                     if (!isStoppedRef.current && remainingTextBuffer.trim()) {
                         console.log(`Stream done. Enqueueing final chunk (length: ${remainingTextBuffer.length})`);
