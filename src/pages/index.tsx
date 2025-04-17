@@ -177,19 +177,52 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="container">
+    <div className="container full-page-layout">
       <Head>
         <title>Kid-Friendly AI Buddy</title>
         <meta name="description" content="A simple, kid-friendly AI assistant" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className="main">
-        <div className="app-container">
-          <h1 className="title">Ask Me Anything!</h1>
-          
-          {/* Chat History Display */}
+      {/* Left Sidebar for Controls */}
+      <aside className="sidebar">
+        <h1 className="title">AI Buddy</h1>
+        
+        <div className="controls-area">
+          {/* --- Render Simplified Voice Button --- */}
+          <VoiceButton 
+            onResult={handleQuestionSubmit} 
+            isListening={isListening}
+            setIsListening={setIsListening}
+          />
+          {/* --- End Render Simplified Voice Button --- */}
+
+          {/* --- Render Separate Stop Speaking Button --- */}
+          <button 
+              className="control-button stop-speaking-button" 
+              onClick={handleStopSpeaking}
+              disabled={!isSpeaking} // Only enable when speaking
+              aria-label="Stop Speaking"
+          >
+              Stop Speaking
+          </button>
+          {/* --- End Render Separate Stop Speaking Button --- */}
+        
+          {errorMessage && (
+            <div className="error-container sidebar-error">
+              <p>{errorMessage}</p>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Right Main Area for Chat */}
+      <main className="main-content">
+        <div className="chat-history-container">
           <div className="chat-history">
+            {conversationHistory.length === 0 && !isLoading && (
+                <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
+            )}
             {conversationHistory.map((msg, index) => (
               <div key={index} className={`chat-message ${msg.type}`}>
                 <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
@@ -202,27 +235,9 @@ export default function Home() {
                 </div>
             )}
           </div>
-          
-          {/* Voice Button and Status */}
-          <div className="controls-container">
-            <VoiceButton 
-              onResult={handleQuestionSubmit} 
-              isListening={isListening}
-              setIsListening={setIsListening}
-              isLoading={isLoading} 
-              isSpeaking={isSpeaking}
-              onStopSpeaking={handleStopSpeaking}
-            />
-          
-            {errorMessage && (
-              <div className="error-container">
-                <p>{errorMessage}</p>
-              </div>
-            )}
-          </div>
-
         </div>
       </main>
+
     </div>
   );
 } 

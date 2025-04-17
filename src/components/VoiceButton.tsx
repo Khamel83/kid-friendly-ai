@@ -1,41 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+// --- Simplify Props --- 
 interface VoiceButtonProps {
   onResult: (text: string) => void;
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
-  isLoading: boolean;
-  isSpeaking: boolean;
-  onStopSpeaking: () => void;
 }
+// --- End Simplify Props ---
 
-export default function VoiceButton({ onResult, isListening, setIsListening, isLoading, isSpeaking, onStopSpeaking }: VoiceButtonProps) {
+export default function VoiceButton({ 
+  onResult, 
+  isListening, 
+  setIsListening, 
+}: VoiceButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
-  // Refs for audio processing
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorRef = useRef<AudioWorkletNode | ScriptProcessorNode | null>(null);
   const audioChunksRef = useRef<Float32Array[]>([]);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const isListeningRef = useRef(false);
 
-  // Keep isListeningRef synced with the isListening prop/state
   useEffect(() => {
     isListeningRef.current = isListening;
   }, [isListening]);
-
-  // --- Add useEffect to clear local error if parent clears global error ---
-  // This might not be strictly necessary if parent also passes down the error message,
-  // but handles cases where parent clears the error externally.
-  useEffect(() => {
-    if (!isLoading && !isSpeaking && !isListening) {
-      // If the parent component is idle, clear local errors too
-      // This assumes the parent clears its own `errorMessage` prop
-      // setError(null); // Consider if this is needed based on parent state management
-    } 
-  }, [isLoading, isSpeaking, isListening]);
-  // --- End useEffect ---
 
   // Helper function for cleanup (wrapped in useCallback)
   const cleanupAudioResources = useCallback(() => {
@@ -211,49 +200,31 @@ export default function VoiceButton({ onResult, isListening, setIsListening, isL
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onResult]); // Dependency: onResult prop
 
-  // Stop recording function (wrapped in useCallback)
   const stopRecordingInternal = useCallback(async () => {
-    // Use the ref to check the *actual* current listening state
     if (!isListeningRef.current && !streamRef.current) {
       console.log("Stop recording called but not currently listening or stream not active.");
       return; 
     }
-    
-    // Prevent double-stopping
     if (!isListeningRef.current) {
       console.log("Already stopped recording.");
       return;
     }
-
     console.log("Stopping recording...");
-    setIsListening(false); // Trigger state update which updates isListeningRef via useEffect
-
-    // Get chunks *before* cleanup disconnects the processor
+    setIsListening(false); 
     const recordedChunks = [...audioChunksRef.current]; 
-    audioChunksRef.current = []; // Clear chunks immediately after copying
-
-    // Clear local error when stopping successfully (before potential transcription errors)
+    audioChunksRef.current = []; 
     setError(null); 
-
     cleanupAudioResources();
-
-    // Process accumulated chunks
     if (recordedChunks.length > 0) {
       console.log(`Processing ${recordedChunks.length} audio chunks.`);
       try {
         const wavBlob = convertToWav(recordedChunks);
-        console.log('Final Audio Blob:', {
-          size: wavBlob.size,
-          type: wavBlob.type
-        });
-
-        // Check blob size again before sending
+        console.log('Final Audio Blob:', { size: wavBlob.size, type: wavBlob.type });
         if (wavBlob.size <= 44) {
             console.error('Warning: WAV blob size indicates no audio data captured.');
             setError('No audio detected. Please try speaking louder or closer to the mic.');
-            return; // Don't attempt transcription if likely empty
+            return; 
         }
-
         await transcribeAudio(wavBlob);
       } catch (err) {
         console.error('Error processing or transcribing audio:', err);
@@ -263,122 +234,51 @@ export default function VoiceButton({ onResult, isListening, setIsListening, isL
       }
     } else {
       console.warn('No audio chunks recorded.');
-       // Don't set an error here if it stopped normally without chunks,
-       // let the parent handle status messages.
-       // setError('No audio recorded. Please try again.'); 
     }
   }, [setIsListening, cleanupAudioResources, convertToWav, transcribeAudio]);
 
-  // Effect for component mount/unmount cleanup
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      // Ensure cleanup happens on unmount
-      // Use the ref value at the time of unmount
-      if (isListeningRef.current) {
-        stopRecordingInternal(); 
-      }
-    };
-  }, [stopRecordingInternal]); // Dependency: stopRecordingInternal
-
   const startRecording = async () => {
-    setError(null); // Clear local error at the start
+    setError(null); 
     try {
-      // Cancel any ongoing speech synthesis
-      if (window.speechSynthesis && window.speechSynthesis.speaking) {
-        window.speechSynthesis.cancel();
-        console.log("Cancelled ongoing speech synthesis.");
-      }
-      // --- Also cancel our new audio playback --- 
-      onStopSpeaking(); // Call the stop speaking handler from parent
-      // --- End cancel audio playback --- 
-
-      audioChunksRef.current = []; // Reset chunks
-      
-      // Check if we can get user media
+      audioChunksRef.current = []; 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('getUserMedia is not supported in this browser');
       }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000, // Whisper requires 16kHz
-          channelCount: 1, // Mono audio
-          autoGainControl: true
-        }
-      });
-      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000, channelCount: 1, autoGainControl: true } });
       streamRef.current = stream;
-      
-      // Create audio context if it doesn't exist or is closed
       if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        if (audioContextRef.current) {
-          await audioContextRef.current.close();
-        }
-        audioContextRef.current = new AudioContext({ 
-          sampleRate: 16000, // Whisper requires 16kHz
-          latencyHint: 'interactive'
-        });
+        if (audioContextRef.current) await audioContextRef.current.close();
+        audioContextRef.current = new AudioContext({ sampleRate: 16000, latencyHint: 'interactive' });
         console.log('AudioContext created with sample rate:', audioContextRef.current.sampleRate);
       }
-      
       const audioContext = audioContextRef.current;
-      
-      // Create nodes
       sourceNodeRef.current = audioContext.createMediaStreamSource(stream);
-      
-      // Create an AudioWorkletNode for processing
       try {
-        // Register the worklet processor
         await audioContext.audioWorklet.addModule('/audio-processor.js');
-        const workletNode = new AudioWorkletNode(audioContext, 'audio-processor', {
-          numberOfInputs: 1,
-          numberOfOutputs: 1,
-          processorOptions: {
-            sampleRate: 16000
-          }
-        });
-        
-        // Handle messages from the worklet
+        const workletNode = new AudioWorkletNode(audioContext, 'audio-processor', { numberOfInputs: 1, numberOfOutputs: 1, processorOptions: { sampleRate: 16000 } });
         workletNode.port.onmessage = (event: MessageEvent) => {
-          if (isListeningRef.current) {
-            audioChunksRef.current.push(new Float32Array(event.data));
-          }
+          if (isListeningRef.current) audioChunksRef.current.push(new Float32Array(event.data));
         };
-        
         processorRef.current = workletNode;
       } catch (err) {
         console.warn('AudioWorklet not supported, falling back to ScriptProcessorNode');
-        // Fallback to ScriptProcessorNode if AudioWorklet is not supported
         const scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
         scriptNode.onaudioprocess = (e: AudioProcessingEvent) => {
-          if (isListeningRef.current) {
-            const inputData = e.inputBuffer.getChannelData(0);
-            audioChunksRef.current.push(new Float32Array(inputData));
-          }
+          if (isListeningRef.current) audioChunksRef.current.push(new Float32Array(e.inputBuffer.getChannelData(0)));
         };
-        
         processorRef.current = scriptNode;
       }
-      
-      // Connect the nodes
       if (sourceNodeRef.current && processorRef.current) {
         sourceNodeRef.current.connect(processorRef.current);
         processorRef.current.connect(audioContext.destination);
       } else {
         throw new Error('Failed to create audio nodes');
       }
-      
       console.log("Audio nodes connected, starting recording...");
       setIsListening(true);
-      
     } catch (err) {
       console.error('Error starting recording:', err);
-      let message = 'Failed to start recording. Please check your microphone and browser settings.';
-      
+      let message = 'Failed to start recording. Please check microphone settings/permissions.';
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError' || err.message.includes('permission denied')) {
           message = 'Microphone permission denied. Please allow access to your microphone.';
@@ -388,53 +288,35 @@ export default function VoiceButton({ onResult, isListening, setIsListening, isL
           message = 'Could not set 16kHz sample rate. Please try a different microphone or browser.';
         }
       }
-      
-      setError(message); // Set local error on failure
+      setError(message); 
       setIsListening(false);
       cleanupAudioResources();
     }
   };
-
-  // --- Determine Button State --- 
-  let buttonState: 'idle' | 'listening' | 'loading' | 'speaking' = 'idle';
-  let buttonText = 'Talk';
-  // Make action type flexible
-  let buttonAction: () => void | Promise<void> = startRecording;
-  let isDisabled = false;
-
-  if (isListening) {
-    buttonState = 'listening';
-    buttonText = 'Stop';
-    buttonAction = stopRecordingInternal;
-  } else if (isLoading) {
-    buttonState = 'loading';
-    buttonText = 'Thinking...';
-    isDisabled = true; // Disable button while AI is thinking
-    buttonAction = () => {}; // No action when loading
-  } else if (isSpeaking) {
-    buttonState = 'speaking';
-    buttonText = 'Stop Speaking';
-    buttonAction = onStopSpeaking; // Action is to stop the TTS
-  } 
-  // --- End Determine Button State --- 
+  
+  // --- Simplify Button State Logic --- 
+  const buttonText = isListening ? 'Stop Recording' : 'Talk';
+  const buttonAction = isListening ? stopRecordingInternal : startRecording;
+  const buttonClass = isListening ? 'recording' : 'idle'; // Use 'recording' class
+  // --- End Simplify Button State Logic --- 
 
   return (
     <div className="voice-button-container">
+      {/* Single button manages Talk/Stop Recording */}
       <button 
-        className={`voice-button ${buttonState}`}
-        // Cast action to simple () => void for onClick handler type
-        onClick={buttonAction as () => void} 
-        disabled={isDisabled} // Use the disabled state
-        aria-label={buttonText} // Use dynamic text for accessibility
+        className={`voice-button ${buttonClass}`} 
+        onClick={buttonAction} 
+        aria-label={buttonText} 
       >
-        {buttonText} {/* Display dynamic text */} 
-        {isListening && <div className="pulse-ring animate"></div>} {/* Keep pulse only when listening */}
-        {/* Add loading indicator maybe? */}
-        {isLoading && <div className="loading-spinner"></div>}
+        {buttonText} 
+        {isListening && <div className="pulse-ring animate"></div>} 
       </button>
-      
-      {/* Display local component errors (like mic permission) */} 
       {error && <p className="error-message">{error}</p>}
     </div>
   );
-} 
+}
+
+// Dummy implementations for unchanged functions to satisfy TypeScript during edit
+const _dummyCleanup = () => {};
+const _dummyConvertToWav = (c: Float32Array[]): Blob => new Blob();
+const _dummyTranscribe = async (b: Blob) => {}; 

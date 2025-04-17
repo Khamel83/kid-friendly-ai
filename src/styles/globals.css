@@ -5,11 +5,12 @@
   --accent-color: #ff9a3c;
   --success-color: #4caf50;
   --error-color: #f44336;
-  --background-color: #f8f9fd;
+  --background-color: #f0f4f8;
   --surface-color: #ffffff;
   --text-color: #333333;
-  --text-secondary: #666666;
-  --border-radius: 16px;
+  --text-secondary: #555;
+  --border-radius: 12px;
+  --sidebar-width: 280px;
 }
 
 * {
@@ -20,10 +21,11 @@
 
 html,
 body {
-  font-family: "Comic Sans MS", "Comic Sans", cursive, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
     Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
-  background-color: var(--background-color);
+  background: linear-gradient(135deg, #e6f0ff 0%, var(--background-color) 100%);
   color: var(--text-color);
+  line-height: 1.6;
 }
 
 a {
@@ -31,115 +33,100 @@ a {
   text-decoration: none;
 }
 
-.container {
+.full-page-layout {
+  display: flex;
   min-height: 100vh;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
 }
 
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  max-width: 800px;
-}
-
-.app-container {
+.sidebar {
+  width: var(--sidebar-width);
   background-color: var(--surface-color);
-  border-radius: var(--border-radius);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
-  width: 100%;
+  padding: 2rem 1.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem 3rem;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
 }
 
 .title {
-  color: var(--primary-color);
-  margin-bottom: 1.5rem;
-  font-size: 2.5rem;
+  color: var(--primary-dark);
+  margin-bottom: 2.5rem;
+  font-size: 2.2rem;
+  font-weight: 600;
 }
 
-.instructions {
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
-  font-size: 1.2rem;
-}
-
-/* Voice Button Styles */
-.voice-button-container {
+.controls-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 1rem 0;
   width: 100%;
+}
+
+.voice-button-container {
+  margin-bottom: 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .voice-button {
   position: relative;
-  /* Default to idle state (red) */
-  background-color: var(--error-color);
   color: white;
   border: none;
   border-radius: 50%;
-  width: 180px;
-  height: 180px;
-  font-size: 2.5rem; /* Larger text for Talk/Stop */
-  font-weight: bold;
+  width: 160px;
+  height: 160px;
+  font-size: 2rem;
+  font-weight: 600;
   cursor: pointer;
   outline: none;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease-in-out;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 1rem;
-  box-shadow: 0 6px 16px rgba(244, 67, 54, 0.3); /* Red shadow */
+  margin-bottom: 0.5rem;
+}
+
+.voice-button.idle {
+  background-color: var(--success-color);
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
 }
 
 .voice-button.idle:hover {
-  background-color: #d32f2f; /* Darker red on hover */
-  transform: scale(1.05);
+  background-color: #388e3c;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(76, 175, 80, 0.4);
 }
 
-.voice-button.listening {
-  /* Listening state (green) */
-  background-color: var(--success-color);
-  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.3); /* Green shadow */
+.voice-button.recording {
+  background-color: var(--error-color);
+  box-shadow: 0 5px 15px rgba(244, 67, 54, 0.3);
   animation: pulse-green 1.5s infinite;
 }
 
-.voice-button.listening:hover {
-  background-color: #388e3c; /* Darker green on hover */
-  transform: scale(1.05);
-}
-
-.voice-button.loading {
-  background-color: #bdbdbd; /* Grey */
-  cursor: not-allowed;
-  box-shadow: 0 6px 16px rgba(189, 189, 189, 0.2);
-}
-
-.voice-button.speaking {
-  background-color: var(--primary-color); /* Blue */
-  cursor: pointer; /* Allow clicking to stop */
-  box-shadow: 0 6px 16px rgba(74, 107, 223, 0.3);
-}
-
-.voice-button.speaking:hover {
-  background-color: var(--primary-light);
-  transform: scale(1.05);
+.voice-button.recording:hover {
+  background-color: #d32f2f;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(244, 67, 54, 0.4);
 }
 
 .voice-button:active {
-  transform: scale(0.95);
+  transform: scale(0.95) translateY(1px);
+  box-shadow: 0 2px 8px rgba(0,0,0, 0.2);
 }
 
 .pulse-ring {
@@ -151,7 +138,6 @@ a {
 }
 
 .pulse-ring.animate {
-  /* Pulse with green color */
   animation: pulse-ring-green 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
   border: 6px solid var(--success-color);
 }
@@ -167,20 +153,6 @@ a {
   }
 }
 
-/* Keep original pulse for reference if needed, renamed */
-/* @keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 154, 60, 0.7);
-  }
-  70% {
-    box-shadow: 0 0 0 20px rgba(255, 154, 60, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 154, 60, 0);
-  }
-} */
-
-/* New pulsing animation for green button */
 @keyframes pulse-green {
   0% {
     box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
@@ -193,230 +165,113 @@ a {
   }
 }
 
-.transcript {
-  color: var(--text-secondary);
-  margin-top: 1rem;
-  font-style: italic;
-  max-width: 90%;
-  word-break: break-word;
-}
-
-.error-message {
-  color: var(--error-color);
-  margin-top: 1rem;
-}
-
-/* Loading Animation */
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 2rem 0;
-}
-
-.loading p {
-  margin-top: 1rem;
-  color: var(--text-secondary);
-}
-
-.loading-animation {
-  display: inline-block;
-  position: relative;
-  width: 80px;
-  height: 80px;
-}
-
-.loading-animation div {
-  position: absolute;
-  top: 33px;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: var(--primary-color);
-  animation-timing-function: cubic-bezier(0, 1, 1, 0);
-}
-
-.loading-animation div:nth-child(1) {
-  left: 8px;
-  animation: loading1 0.6s infinite;
-}
-
-.loading-animation div:nth-child(2) {
-  left: 8px;
-  animation: loading2 0.6s infinite;
-}
-
-.loading-animation div:nth-child(3) {
-  left: 32px;
-  animation: loading2 0.6s infinite;
-}
-
-.loading-animation div:nth-child(4) {
-  left: 56px;
-  animation: loading3 0.6s infinite;
-}
-
-@keyframes loading1 {
-  0% {
-    transform: scale(0);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes loading2 {
-  0% {
-    transform: translate(0, 0);
-  }
-  100% {
-    transform: translate(24px, 0);
-  }
-}
-
-@keyframes loading3 {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(0);
-  }
-}
-
-/* Response Section */
-.response-container {
-  background-color: #f0f5ff;
-  border-radius: var(--border-radius);
-  padding: 1.5rem;
-  margin-top: 2rem;
-  width: 100%;
-  text-align: left;
-  border-left: 5px solid var(--primary-color);
-}
-
-.question {
-  font-weight: bold;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
-  font-style: italic;
-}
-
-.response-content {
-  font-size: 1.2rem;
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
-}
-
-.stop-button, .reset-button {
-  background-color: var(--primary-color);
+.control-button.stop-speaking-button {
+  background-color: var(--error-color);
   color: white;
   border: none;
   border-radius: 30px;
-  padding: 0.75rem 1.5rem;
+  padding: 0.8rem 1.8rem;
   font-size: 1rem;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease-in-out;
+  width: 80%;
   margin-top: 1rem;
-  display: block;
-  width: fit-content;
+  box-shadow: 0 4px 10px rgba(244, 67, 54, 0.2);
 }
 
-.stop-button {
-  background-color: var(--error-color);
-  margin-right: 1rem;
-}
-
-.reset-button {
-  background-color: var(--accent-color);
-}
-
-.stop-button:hover, .reset-button:hover {
-  opacity: 0.9;
+.control-button.stop-speaking-button:hover:not(:disabled) {
+  background-color: #d32f2f;
   transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(244, 67, 54, 0.3);
 }
 
-.error-container {
-  background-color: #ffebee;
+.control-button.stop-speaking-button:disabled {
+  background-color: #bdbdbd;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.error-container.sidebar-error {
+  background-color: transparent;
+  padding: 0;
+  margin-top: 1rem;
+  width: 100%;
+  text-align: center;
+}
+
+.sidebar-error .error-message {
   color: var(--error-color);
-  padding: 1rem;
-  border-radius: var(--border-radius);
-  margin-top: 1.5rem;
-  max-width: 90%;
+  font-size: 0.9rem;
 }
 
-/* Responsive Adjustments */
-@media (max-width: 600px) {
-  .app-container {
-    padding: 1.5rem;
-  }
-  
-  .title {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-  
-  .voice-button {
-    width: 150px;
-    height: 150px;
-    font-size: 1.2rem;
-  }
-  
-  .response-content {
-    font-size: 1.1rem;
-  }
+.chat-history-container {
+  flex: 1;
+  width: 100%;
+  display: flex;
 }
 
-/* Chat History Styles */
 .chat-history {
   width: 100%;
-  max-height: 60vh; /* Adjust as needed */
   overflow-y: auto;
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  border: 1px solid #e0e0e0;
+  padding: 1.5rem;
+  border: 1px solid #dde;
   border-radius: var(--border-radius);
-  background-color: #f9f9f9;
+  background-color: var(--surface-color);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+  flex: 1;
+}
+
+.empty-chat-message {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 3rem 1rem;
+  font-style: italic;
 }
 
 .chat-message {
-  margin-bottom: 1rem;
-  padding: 0.8rem 1rem;
+  margin-bottom: 1.2rem;
+  padding: 0.8rem 1.2rem;
   border-radius: var(--border-radius);
-  display: flex; /* Use flexbox for label and text */
-  align-items: baseline; /* Align label and text start */
+  display: flex;
+  align-items: flex-start;
+  max-width: 75%;
+  line-height: 1.5;
 }
 
 .chat-message.user {
-  background-color: #e3f2fd; /* Light blue for user */
-  text-align: left;
-  margin-right: 20%; /* Shift user messages left */
+  background-color: #e3f2fd;
+  margin-left: auto;
+  border-bottom-right-radius: 4px;
 }
 
 .chat-message.ai {
-  background-color: #e8f5e9; /* Light green for AI */
-  text-align: left;
-  margin-left: 20%; /* Shift AI messages right */
+  background-color: #e8f5e9;
+  margin-right: auto;
+  border-bottom-left-radius: 4px;
 }
 
 .chat-message p {
   margin: 0;
-  line-height: 1.5;
   word-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .chat-message .chat-label {
-  font-weight: bold;
+  font-weight: 700;
   margin-right: 8px;
-  flex-shrink: 0; /* Prevent label from shrinking */
+  flex-shrink: 0;
 }
 
-.chat-message.user .chat-label {
-  color: var(--primary-dark); 
-}
+.chat-message.user .chat-label { color: var(--primary-dark); }
+.chat-message.ai .chat-label { color: var(--success-color); }
 
-.chat-message.ai .chat-label {
-  color: var(--success-color); 
+.loading-dots {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
 }
 
 .loading-dots span {
@@ -439,26 +294,36 @@ a {
   100% { opacity: 0.2; }
 }
 
-/* Controls Container */
-.controls-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-  margin-top: 1rem;
-}
+@media (max-width: 768px) {
+  .full-page-layout {
+    flex-direction: column;
+  }
 
-/* Loading spinner inside button */
-.loading-spinner {
-  border: 4px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top: 4px solid #fff;
-  width: 40px;
-  height: 40px;
-  animation: spin 1s linear infinite;
-}
+  .sidebar {
+    position: static;
+    width: 100%;
+    height: auto;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    padding: 1.5rem;
+  }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  .main-content {
+    margin-left: 0;
+    padding: 1.5rem;
+  }
+  
+  .chat-history {
+    max-height: none;
+  }
+  
+  .voice-button {
+    width: 140px;
+    height: 140px;
+    font-size: 1.8rem;
+  }
+
+  .control-button.stop-speaking-button {
+    width: 70%;
+    padding: 0.7rem 1.5rem;
+  }
 } 
