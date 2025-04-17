@@ -70,16 +70,17 @@ export default function Home() {
       // --- Robust Error Handling --- 
       if (!response.ok) {
         let errorMsg = `API Error: ${response.status} ${response.statusText}`;
+        // Try to parse error JSON, but don't hard error if it fails (common for HTML error pages)
         try {
-          const errorData = await response.json(); // Try to parse error JSON
+          const errorData = await response.json(); 
           errorMsg = errorData.error || errorMsg; // Use specific error if available
-        } catch (jsonError) {
-          // If parsing JSON fails, use the status text
-          console.error('Failed to parse error JSON', jsonError);
+        } catch (jsonError) { 
+          // Intentionally ignore JSON parse error here, use status text
+          console.log(`Response from /api/ask was not JSON (status: ${response.status}). Using status text as error.`); 
         }
         throw new Error(errorMsg);
       }
-      // --- End Robust Error Handling --- 
+      // --- End Robust Error Handling ---
 
       const data = await response.json();
       console.log('API response:', data);
