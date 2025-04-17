@@ -385,8 +385,11 @@ export default function Home() {
                             let firstPart = '';
                             const words = tempBufferForFirstChunk.trim().split(/\s+/);
                             const wordCount = words[0] === '' ? 0 : words.length;
-                            const MIN_WORDS_FOR_FIRST_CHUNK = 8;
-                            const TARGET_WORDS_FOR_FIRST_CHUNK = 10;
+                            
+                            // --- Adjust Word Count Thresholds --- 
+                            const MIN_WORDS_FOR_FIRST_CHUNK = 15; // Changed from 8
+                            const TARGET_WORDS_FOR_FIRST_CHUNK = 15; // Changed from 10
+                            // --- End Adjust Word Count Thresholds ---
 
                             if (wordCount >= MIN_WORDS_FOR_FIRST_CHUNK) {
                                firstPart = words.slice(0, TARGET_WORDS_FOR_FIRST_CHUNK).join(' ');
@@ -395,6 +398,11 @@ export default function Home() {
                                if (firstPart && !isStoppedRef.current) {
                                    console.log(`Met word threshold. Sending first chunk (~${TARGET_WORDS_FOR_FIRST_CHUNK} words): "${firstPart}"`);
                                    enqueueTtsRequest(firstPart); 
+                                   // Trigger Playback AFTER first chunk is enqueued
+                                   if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
+                                        console.log("First audio chunk enqueued, starting playback chain.");
+                                        playNextAudioChunk(); 
+                                   }
                                    firstChunkProcessed = true;
                                }
                             } else {
