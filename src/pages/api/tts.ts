@@ -43,34 +43,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(500).json({ error: 'Internal server error generating audio stream.' });
     }
     
-    // Use the stream reader
-    const reader = readableStream.getReader();
-    
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                console.log('TTS stream finished sending.');
-                break; // Exit the loop when the stream is finished
+    // Cast to any to handle potential type mismatch between Node stream and Web stream in different envs
+    const nodeStream = readableStream as any;
+
+    // Check for pipe method again
+    if (typeof nodeStream.pipe === 'function') {
+        nodeStream.pipe(res); // Pipe directly to the response
+         
+        // Handle stream finish/error
+        nodeStream.on('end', () => {
+            console.log('TTS stream finished sending via pipe.');
+            // res.end() is usually called automatically by pipe on end
+        });
+        nodeStream.on('error', (err: Error) => {
+            console.error('Error piping TTS stream:', err);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Error generating audio stream' });
+            } else if (!res.writableEnded){
+                res.end(); // End the response if headers already sent but stream not ended
             }
-            if (value) {
-                res.write(value); // Write the chunk to the response
-            }
-        }
-    } catch (streamError) {
-        console.error('Error reading or writing TTS stream:', streamError);
-        if (!res.headersSent) {
-             // Attempt to send an error status only if nothing has been sent yet
-            res.status(500).json({ error: 'Error streaming audio' });
-        }
-    } finally {
-        // Ensure the response is always ended
-        if (!res.writableEnded) {
-            res.end();
-        }
-        // Release the lock on the reader
-        reader.releaseLock(); 
-    }
+        });
+   } else {
+       console.error('Error: mp3.body does not have a pipe method. Cannot stream.');
+       return res.status(500).json({ error: 'Internal server error generating audio stream.' });
+   }
 
   } catch (error) {
     console.error('Error in /api/tts:', error);
