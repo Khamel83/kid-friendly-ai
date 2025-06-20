@@ -82,7 +82,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               model: 'google/gemini-2.0-flash-lite-001',
               messages: llmMessages,
               temperature: 0.7,
-              max_tokens: 300,
+              max_tokens: 200,
               stream: true,
             }),
             signal: controller.signal

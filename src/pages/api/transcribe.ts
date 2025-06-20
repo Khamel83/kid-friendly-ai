@@ -131,7 +131,8 @@ export default async function handler(
       file: file,
       model: 'whisper-1',
       language: 'en', // Specify English to improve accuracy
-      response_format: 'json'
+      response_format: 'json',
+      temperature: 0.2
     });
 
     return res.status(200).json({ text: response.text });

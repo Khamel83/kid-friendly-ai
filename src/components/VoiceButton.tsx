@@ -81,7 +81,7 @@ export default function VoiceButton({
     }
 
     // Ensure audio length is optimal for Whisper (pad or trim to 30 seconds)
-    const targetLength = 30 * sampleRate; // 30 seconds at 16kHz
+    const targetLength = 15 * sampleRate; // 15 seconds at 16kHz
     const audioData = new Float32Array(targetLength);
     let offset = 0;
     
