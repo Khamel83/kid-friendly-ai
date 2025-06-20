@@ -600,33 +600,12 @@ export default function Home() {
 
   // Auto-scroll effect
   useEffect(() => {
-    if (!chatHistoryRef.current) return;
-
-    const container = chatHistoryRef.current;
-    const scrollHeight = container.scrollHeight;
-    const clientHeight = container.clientHeight;
-    const scrollTop = container.scrollTop;
-    const isNearBottom = scrollHeight - (clientHeight + scrollTop) <= 100; // Increased threshold to 100px
-    
-    console.log('Auto-scroll check:', {
-      historyLength: conversationHistory.length,
-      isProcessing,
-      isSpeaking,
-      scrollHeight,
-      clientHeight,
-      scrollTop,
-      isNearBottom
-    });
-    
-    // Only scroll if we're not already near the bottom
-    if (!isNearBottom) {
-      console.log('Scrolling to bottom with smooth behavior...');
-      container.scrollTo({
-        top: scrollHeight,
+    if (chatHistoryRef.current) {
+      const { scrollHeight, clientHeight } = chatHistoryRef.current;
+      chatHistoryRef.current.scrollTo({
+        top: scrollHeight - clientHeight,
         behavior: 'smooth'
       });
-    } else {
-      console.log('Already near bottom, no need to scroll');
     }
   }, [conversationHistory, isProcessing, isSpeaking]);
 
