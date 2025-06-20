@@ -35,6 +35,7 @@ export default function Home() {
   const sentenceBufferRef = useRef(''); // Buffer for incoming text chunks to form sentences
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null); // Ref for the stream reader
   const abortControllerRef = useRef<AbortController | null>(null); // Ref to allow aborting fetch
+  const chatHistoryRef = useRef<HTMLDivElement>(null);
 
   // --- REMOVE SessionStorage Loading Effect --- 
   // useEffect(() => { ... load logic ... }, []);
@@ -403,8 +404,11 @@ export default function Home() {
         if (!text || text.trim() === '') return;
         console.log('Submitting question via POST:', text);
 
-        // Step 1: Stop ongoing process
+        // Step 1: Stop ongoing process and wait for cleanup
+        console.log('Stopping any ongoing speech before starting new question...');
         await handleStopSpeaking();
+        // Add a small delay to ensure all resources are properly cleaned up
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // Step 2: Reset stop flag
         isStoppedRef.current = false; 
@@ -594,6 +598,38 @@ export default function Home() {
     return () => clearInterval(healthCheckInterval);
   }, [checkConnectionHealth]);
 
+  // Auto-scroll effect
+  useEffect(() => {
+    if (!chatHistoryRef.current) return;
+
+    const container = chatHistoryRef.current;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    const scrollTop = container.scrollTop;
+    const isNearBottom = scrollHeight - (clientHeight + scrollTop) <= 100; // Increased threshold to 100px
+    
+    console.log('Auto-scroll check:', {
+      historyLength: conversationHistory.length,
+      isProcessing,
+      isSpeaking,
+      scrollHeight,
+      clientHeight,
+      scrollTop,
+      isNearBottom
+    });
+    
+    // Only scroll if we're not already near the bottom
+    if (!isNearBottom) {
+      console.log('Scrolling to bottom with smooth behavior...');
+      container.scrollTo({
+        top: scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      console.log('Already near bottom, no need to scroll');
+    }
+  }, [conversationHistory, isProcessing, isSpeaking]);
+
   return (
     <div className="container full-page-layout">
       <Head>
@@ -638,7 +674,7 @@ export default function Home() {
       {/* Right Main Area for Chat */}
       <main className="main-content">
         <div className="chat-history-container">
-          <div className="chat-history">
+          <div className="chat-history" ref={chatHistoryRef}>
             {conversationHistory.length === 0 && !isProcessing && (
                 <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
             )}

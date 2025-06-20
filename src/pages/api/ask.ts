@@ -79,7 +79,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-exp:free',
+              model: 'google/gemini-2.0-flash-lite-001',
               messages: llmMessages,
               temperature: 0.7,
               max_tokens: 300,
