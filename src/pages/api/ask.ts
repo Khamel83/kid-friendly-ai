@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           conversationHistory.forEach(msg => {
             llmMessages.push({
               role: msg.speaker === 'ai' ? 'assistant' : 'user',
-              content: msg.text
+              content: msg.speaker === 'user' ? formatUserQuestion(msg.text) : msg.text
             });
           });
         }
