@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import VoiceButton from '../components/VoiceButton';
+import CharacterCompanion from '../components/CharacterCompanion';
+import MiniGame from '../components/MiniGame';
+import { SoundManager } from '../utils/soundEffects';
 import { Buffer } from 'buffer'; // Needed for sentence detection buffer
 
 interface Message {
@@ -21,6 +24,13 @@ export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false); // Audio is queued or playing
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // New Enhancement States
+  const [characterState, setCharacterState] = useState<'idle' | 'listening' | 'thinking' | 'speaking' | 'excited'>('idle');
+  const [stars, setStars] = useState(0);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [particles, setParticles] = useState<Array<{id: number, x: number, y: number, color: string}>>([]);
+  const [showGame, setShowGame] = useState(false);
 
   // Streaming & Queuing States
   const ttsRequestQueueRef = useRef<string[]>([]); // Queue of sentences needing TTS
@@ -501,7 +511,9 @@ export default function Home() {
                         // Add Final History Update
                         if (!isStoppedRef.current && accumulatedResponse) {
                              console.log('Updating history with final complete AI message.');
-                             addMessageToHistory('ai', accumulatedResponse, true); 
+                             addMessageToHistory('ai', accumulatedResponse, true);
+                             // Play success sound for successful response
+                             soundManager.current?.playSuccess();
                         }
 
                         // --- Send ENTIRE accumulated response for TTS --- 
@@ -609,6 +621,70 @@ export default function Home() {
     }
   }, [conversationHistory, isProcessing, isSpeaking]);
 
+  // Initialize sound manager
+  const soundManager = useRef<SoundManager | null>(null);
+
+  useEffect(() => {
+    soundManager.current = SoundManager.getInstance();
+  }, []);
+
+  // Character state management based on app state
+  useEffect(() => {
+    if (isListening) {
+      setCharacterState('listening');
+      soundManager.current?.playStart();
+    } else if (isProcessing) {
+      setCharacterState('thinking');
+    } else if (isSpeaking) {
+      setCharacterState('speaking');
+    } else {
+      setCharacterState('idle');
+    }
+  }, [isListening, isProcessing, isSpeaking]);
+
+  // Visual effects functions
+  const createParticles = useCallback((x: number, y: number, count: number = 10) => {
+    const colors = ['#ffe66d', '#ff6b6b', '#4ecdc4', '#a8e6cf', '#95e1d3'];
+    const newParticles = Array.from({ length: count }, (_, i) => ({
+      id: Date.now() + i,
+      x: x + (Math.random() - 0.5) * 100,
+      y: y + (Math.random() - 0.5) * 100,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    }));
+    setParticles(prev => [...prev, ...newParticles]);
+
+    // Remove particles after animation
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => !newParticles.some(np => np.id === p.id)));
+    }, 2000);
+  }, []);
+
+  const triggerCelebration = useCallback(() => {
+    setStars(prev => prev + 1);
+    setShowConfetti(true);
+    setCharacterState('excited');
+
+    // Play celebration sound
+    soundManager.current?.playCheer();
+
+    // Create particles around character
+    const character = document.querySelector('.character-companion');
+    if (character) {
+      const rect = character.getBoundingClientRect();
+      createParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, 20);
+    }
+
+    setTimeout(() => setShowConfetti(false), 3000);
+    setTimeout(() => setCharacterState('idle'), 2000);
+  }, [createParticles]);
+
+  // Trigger celebration on successful interactions
+  useEffect(() => {
+    if (conversationHistory.length > 0 && conversationHistory.length % 3 === 0) {
+      triggerCelebration();
+    }
+  }, [conversationHistory.length, triggerCelebration]);
+
   return (
     <div className="container full-page-layout">
       <Head>
@@ -620,7 +696,17 @@ export default function Home() {
       {/* Left Sidebar for Controls */}
       <aside className="sidebar">
         <h1 className="title">AI Buddy</h1>
-        
+
+        {/* Character Companion */}
+        <div className="character-container">
+          <CharacterCompanion state={characterState} size={100} />
+          <div className="stars-display">
+            {[...Array(stars)].map((_, i) => (
+              <span key={i} className="star">⭐</span>
+            ))}
+          </div>
+        </div>
+
         <div className="controls-area">
           {/* --- Render Simplified Voice Button --- */}
           <VoiceButton 
@@ -632,16 +718,27 @@ export default function Home() {
           {/* --- End Render Simplified Voice Button --- */}
 
           {/* --- Render Separate Stop Speaking Button --- */}
-          <button 
-              className="control-button stop-speaking-button" 
+          <button
+              className="control-button stop-speaking-button"
               onClick={handleStopSpeaking}
-              disabled={!isProcessing && !isSpeaking} 
-              aria-label="Stop" 
+              disabled={!isProcessing && !isSpeaking}
+              aria-label="Stop"
           >
               Stop {/* Simple "Stop" covers both thinking and speaking */}
           </button>
           {/* --- End Render Separate Stop Speaking Button --- */}
-        
+
+          {/* Mini Game Button */}
+          <button
+              className="control-button game-button"
+              onClick={() => setShowGame(!showGame)}
+              disabled={isProcessing || isSpeaking}
+              aria-label="Toggle Game"
+          >
+              {showGame ? 'Back to Chat 💬' : 'Play Game 🎮'}
+          </button>
+          {/* --- End Mini Game Button --- */}
+
           {errorMessage && (
             <div className="error-container sidebar-error">
               <p>{errorMessage}</p>
@@ -652,26 +749,71 @@ export default function Home() {
 
       {/* Right Main Area for Chat */}
       <main className="main-content">
-        <div className="chat-history-container">
-          <div className="chat-history" ref={chatHistoryRef}>
-            {conversationHistory.length === 0 && !isProcessing && (
-                <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
-            )}
-            {conversationHistory.map((msg, index) => (
-              <div key={index} className={`chat-message ${msg.type}`}>
-                <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
-                <p>{msg.text}</p>
-              </div>
-            ))}
-            {/* Show loading dots only while text stream is active */}
-            {(isProcessing || (isSpeaking && conversationHistory[conversationHistory.length - 1]?.type === 'ai')) && (
-                <div className="chat-message ai loading-dots">
-                    <span></span><span></span><span></span>
-                </div>
-            )}
+        {showGame ? (
+          <div className="game-container">
+            <MiniGame onComplete={() => setShowGame(false)} />
           </div>
-        </div>
+        ) : (
+          <div className="chat-history-container">
+            <div className="chat-history" ref={chatHistoryRef}>
+              {conversationHistory.length === 0 && !isProcessing && (
+                <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
+              )}
+              {conversationHistory.map((msg, index) => (
+                <div key={index} className={`chat-message ${msg.type}`}>
+                  <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
+                  <p>{msg.text}</p>
+                </div>
+              ))}
+              {/* Show loading dots only while text stream is active */}
+              {(isProcessing || (isSpeaking && conversationHistory[conversationHistory.length - 1]?.type === 'ai')) && (
+                <div className="chat-message ai loading-dots">
+                  <span></span><span></span><span></span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
+
+      {/* Visual Effects */}
+      {showConfetti && (
+        <div className="confetti-overlay">
+          {[...Array(50)].map((_, i) => (
+            <div
+              key={i}
+              className="confetti-piece"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                backgroundColor: ['#ffe66d', '#ff6b6b', '#4ecdc4', '#a8e6cf', '#95e1d3'][Math.floor(Math.random() * 5)],
+                animation: `confettiFall ${1 + Math.random() * 2}s linear forwards`,
+                animationDelay: `${Math.random() * 0.5}s`
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Particles */}
+      {particles.map(particle => (
+        <div
+          key={particle.id}
+          className="particle"
+          style={{
+            position: 'fixed',
+            left: particle.x,
+            top: particle.y,
+            width: '8px',
+            height: '8px',
+            backgroundColor: particle.color,
+            borderRadius: '50%',
+            pointerEvents: 'none',
+            animation: 'particleFloat 2s ease-out forwards',
+            zIndex: 1000
+          }}
+        />
+      ))}
 
     </div>
   );

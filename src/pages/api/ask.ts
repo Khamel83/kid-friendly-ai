@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // --- Main try block for fetch and stream processing ---
     try {
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 20000); 
+        timeoutId = setTimeout(() => controller.abort(), 15000); 
 
         // --- Format LLM messages with history ---
         const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
@@ -79,10 +79,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-lite-001',
+              model: 'google/gemini-2.5-flash-lite',
               messages: llmMessages,
-              temperature: 0.7,
-              max_tokens: 200,
+              temperature: 0.8,
+              max_tokens: 150,
               stream: true,
             }),
             signal: controller.signal
