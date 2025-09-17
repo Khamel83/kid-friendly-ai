@@ -5,6 +5,7 @@ import CharacterCompanion from '../components/CharacterCompanion';
 import MiniGame from '../components/MiniGame';
 import { SoundManager } from '../utils/soundEffects';
 import { register } from '../utils/registerServiceWorker';
+import { AccessibilityUtils } from '../utils/accessibility';
 import { Buffer } from 'buffer'; // Needed for sentence detection buffer
 
 interface Message {
@@ -26,12 +27,16 @@ export default function Home() {
   const [conversationHistory, setConversationHistory] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // New Enhancement States
+  // Enhancement States
   const [characterState, setCharacterState] = useState<'idle' | 'listening' | 'thinking' | 'speaking' | 'excited'>('idle');
   const [stars, setStars] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const [particles, setParticles] = useState<Array<{id: number, x: number, y: number, color: string}>>([]);
   const [showGame, setShowGame] = useState(false);
+
+  // Action Bar States
+  const [isMuted, setIsMuted] = useState(false);
+  const [lastAiResponse, setLastAiResponse] = useState('');
 
   // Streaming & Queuing States
   const ttsRequestQueueRef = useRef<string[]>([]); // Queue of sentences needing TTS
@@ -401,6 +406,12 @@ export default function Home() {
 
   // --- Handle Text Stream (Simplified - Single TTS Chunk) ---
   const handleQuestionSubmit = async (text: string) => {
+    // Don't process if muted
+    if (isMuted) {
+      setErrorMessage('Audio is muted. Please unmute to use voice features.');
+      return;
+    }
+
     let retryCount = 0;
     const maxRetries = 2;
     
@@ -634,6 +645,35 @@ export default function Home() {
     soundManager.current = SoundManager.getInstance();
   }, []);
 
+  // Set up keyboard navigation for action bar
+  useEffect(() => {
+    const actionBar = document.querySelector('.fixed-action-bar') as HTMLElement;
+    if (actionBar) {
+      // Setup keyboard navigation for the action bar
+      AccessibilityUtils.setupKeyboardNavigation(
+        actionBar,
+        () => {
+          // Handle Enter key - could be used to focus first button
+          const firstButton = actionBar.querySelector('.action-button') as HTMLButtonElement;
+          if (firstButton) firstButton.focus();
+        },
+        () => {
+          // Handle Space key - could be used to activate last focused button
+          const activeElement = document.activeElement as HTMLButtonElement;
+          if (activeElement && actionBar.contains(activeElement)) {
+            activeElement.click();
+          }
+        }
+      );
+    }
+
+    return () => {
+      if (actionBar) {
+        AccessibilityUtils.removeKeyboardNavigation(actionBar);
+      }
+    };
+  }, []);
+
   // Character state management based on app state
   useEffect(() => {
     if (isListening) {
@@ -683,6 +723,45 @@ export default function Home() {
     setTimeout(() => setShowConfetti(false), 3000);
     setTimeout(() => setCharacterState('idle'), 2000);
   }, [createParticles]);
+
+  // Add last AI response tracking
+  useEffect(() => {
+    const lastAiMessage = conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.type === 'ai' && msg.text.trim() !== '');
+
+    if (lastAiMessage) {
+      setLastAiResponse(lastAiMessage.text);
+    }
+  }, [conversationHistory]);
+
+  // Toggle mute state
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => {
+      const newMutedState = !prev;
+
+      // Stop audio if muting
+      if (newMutedState && (isSpeaking || isProcessing)) {
+        handleStopSpeaking();
+      }
+
+      return newMutedState;
+    });
+  }, [isSpeaking, isProcessing, handleStopSpeaking]);
+
+  // Read last AI response aloud
+  const readLastResponse = useCallback(() => {
+    if (lastAiResponse.trim() && !isMuted && !isSpeaking && !isProcessing) {
+      // Clear any ongoing audio
+      handleStopSpeaking();
+
+      // Enqueue the last response for TTS
+      setTimeout(() => {
+        enqueueTtsRequest(lastAiResponse);
+      }, 100);
+    }
+  }, [lastAiResponse, isMuted, isSpeaking, isProcessing, handleStopSpeaking, enqueueTtsRequest]);
 
   // Trigger celebration on successful interactions
   useEffect(() => {
@@ -763,7 +842,7 @@ export default function Home() {
           <div className="chat-history-container">
             <div className="chat-history" ref={chatHistoryRef}>
               {conversationHistory.length === 0 && !isProcessing && (
-                <p className="empty-chat-message">Press the green 'Talk' button to start!</p>
+                <p className="empty-chat-message">Press the green &apos;Talk&apos; button to start!</p>
               )}
               {conversationHistory.map((msg, index) => (
                 <div key={index} className={`chat-message ${msg.type}`}>
@@ -781,6 +860,64 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* Fixed Action Bar */}
+      <div className="fixed-action-bar">
+        <button
+          className="action-button"
+          onClick={() => {
+            if (isListening) {
+              // This will be handled by VoiceButton component
+              const voiceButton = document.querySelector('.voice-button') as HTMLButtonElement;
+              if (voiceButton) voiceButton.click();
+            } else {
+              // Trigger voice recording through the existing mechanism
+              if (!isProcessing && !isSpeaking && !isMuted) {
+                const voiceButton = document.querySelector('.voice-button') as HTMLButtonElement;
+                if (voiceButton) voiceButton.click();
+              }
+            }
+          }}
+          disabled={isProcessing || isSpeaking || isMuted}
+          aria-label={isListening ? "Stop recording" : "Start talking"}
+          title={isListening ? "Stop recording" : "Start talking"}
+        >
+          {isListening ? '⏹️' : '🎤'}
+        </button>
+
+        <button
+          className="action-button"
+          onClick={readLastResponse}
+          disabled={!lastAiResponse.trim() || isMuted || isSpeaking || isProcessing}
+          aria-label="Read last response aloud"
+          title="Read last response aloud"
+        >
+          🔊
+        </button>
+
+        <button
+          className="action-button"
+          onClick={toggleMute}
+          aria-label={isMuted ? "Unmute audio" : "Mute audio"}
+          title={isMuted ? "Unmute audio" : "Mute audio"}
+        >
+          {isMuted ? '🔇' : '🔊'}
+        </button>
+
+        <button
+          className="action-button"
+          onClick={() => {
+            if (showGame) {
+              setShowGame(false);
+            }
+          }}
+          disabled={!showGame}
+          aria-label="Back to chat"
+          title="Back to chat"
+        >
+          ↩️
+        </button>
+      </div>
 
       {/* Visual Effects */}
       {showConfetti && (
