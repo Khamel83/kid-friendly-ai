@@ -4,6 +4,7 @@ import VoiceButton from '../components/VoiceButton';
 import CharacterCompanion from '../components/CharacterCompanion';
 import MiniGame from '../components/MiniGame';
 import { SoundManager } from '../utils/soundEffects';
+import { register } from '../utils/registerServiceWorker';
 import { Buffer } from 'buffer'; // Needed for sentence detection buffer
 
 interface Message {
@@ -51,7 +52,12 @@ export default function Home() {
   // useEffect(() => { ... load logic ... }, []);
   // --- End REMOVE --- 
   
-  // --- Initialize AudioContext only --- 
+  // Initialize Service Worker
+  useEffect(() => {
+    register();
+  }, []);
+
+  // --- Initialize AudioContext only ---
   useEffect(() => {
     if (typeof window !== 'undefined' && !audioContextRef.current) {
        try {

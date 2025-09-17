@@ -1,0 +1,16 @@
+{
+  "name": "Kid-Friendly AI Assistant",
+  "short_name": "Kid AI",
+  "description": "A fun and interactive AI companion for kids",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#87CEEB",
+  "theme_color": "#87CEEB",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x16 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
