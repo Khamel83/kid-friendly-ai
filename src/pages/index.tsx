@@ -6,10 +6,10 @@ import MiniGame from '../components/MiniGame';
 import PatternPuzzleGame from '../components/PatternPuzzleGame';
 import AnimalGame from '../components/AnimalGame';
 import SoundControls from '../components/SoundControls';
-import OfflineIndicator from '../components/OfflineIndicator';
+// import OfflineIndicator from '../components/OfflineIndicator';
 import { EnhancedSoundManager } from '../utils/soundManager';
 import { useSoundControls, useSoundAccessibility } from '../hooks/useSoundEffects';
-import { useOfflineManager, useOfflineState, useSyncOperations, useOfflineQueue } from '../hooks/useOfflineManager';
+// import { useOfflineManager, useOfflineState, useSyncOperations, useOfflineQueue } from '../hooks/useOfflineManager';
 import { SoundAccessibilityManager } from '../utils/soundAccessibility';
 import { register } from '../utils/registerServiceWorker';
 import { AccessibilityUtils } from '../utils/accessibility';
@@ -28,17 +28,9 @@ const SENTENCE_END_REGEX = /([.?!])\s+/;
 const SESSION_STORAGE_KEY = 'kidFriendlyAiHistory';
 
 export default function Home() {
-  // Offline functionality
-  const offlineManager = useOfflineManager({
-    autoInitialize: true,
-    enableStateUpdates: true,
-    enableEventListeners: true,
-    syncOnOnline: true
-  });
-
-  const { isOnline, isOffline, connectionQuality } = useOfflineState();
-  const { syncNow, isSyncing } = useSyncOperations();
-  const { addOperation } = useOfflineQueue();
+  // Simplified offline state (basic functionality only)
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   // Core States
   const [isListening, setIsListening] = useState(false); // Mic is recording
@@ -222,23 +214,10 @@ export default function Home() {
       }
       // --- End Refined Logic ---
 
-      // Save conversation history to offline storage when online, queue for sync when offline
-      if (isOnline && isComplete) {
-        offlineManager.cacheSet(`conversation_${Date.now()}`, {
-          messages: newHistory,
-          timestamp: Date.now(),
-          type: 'conversation_save'
-        }).catch(console.error);
-      } else if (isOffline && isComplete) {
-        addOperation('CONVERSATION_SAVE', {
-          messages: newHistory,
-          timestamp: Date.now()
-        }).catch(console.error);
-      }
 
       return newHistory;
     });
-  }, [isOnline, offlineManager, addOperation]);
+  }, [isOnline]);
 
   // --- Function to add sentence to TTS Queue (Updated with stop check) ---
   const enqueueTtsRequest = useCallback((sentence: string) => {
@@ -869,28 +848,8 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      {/* Offline Status Indicator */}
-      <OfflineIndicator
-        position="top-right"
-        showSyncButton={true}
-        showStats={true}
-        compact={false}
-        onSync={syncNow}
-      />
 
-      {/* Offline Mode Warning */}
-      {isOffline && (
-        <div className="fixed top-20 left-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded z-40">
-          <div className="flex items-center">
-            <span className="text-xl mr-2">📵</span>
-            <div>
-              <p className="font-bold">Offline Mode</p>
-              <p className="text-sm">You're currently offline. The app will continue to work and sync when you're back online.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
+  
       {/* Left Sidebar for Controls */}
       <aside className="sidebar">
         <h1 className="title">AI Buddy</h1>
