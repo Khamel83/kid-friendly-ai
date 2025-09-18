@@ -32,7 +32,7 @@ export interface AnimalQuestion {
 
 export interface AnimalGameState {
   currentQuestion: AnimalQuestion | null;
-  gameState: 'menu' | 'playing' | 'paused' | 'completed' | 'failed' | 'learning';
+  gameState: 'menu' | 'playing' | 'paused' | 'completed' | 'failed' | 'learning' | 'animal-selection';
   score: number;
   level: number;
   streak: number;

@@ -48,6 +48,43 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
   const soundManager = SoundManager.getInstance();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Helper function to get emoji for animal names
+  const getAnimalEmoji = (animalName: string): string => {
+    const emojiMap: { [key: string]: string } = {
+      'Lion': '🦁',
+      'African Elephant': '🐘',
+      'Bottlenose Dolphin': '🐬',
+      'Emperor Penguin': '🐧',
+      'Giraffe': '🦒',
+      'Giant Panda': '🐼',
+      'Koala': '🐨',
+      'Cheetah': '🐆',
+      'Great Horned Owl': '🦉',
+      'Sea Turtle': '🐢',
+      'Red Fox': '🦊',
+      'Zebra': '🦓',
+      'Kangaroo': '🦘',
+      'Raccoon': '🦝',
+      'Eagle': '🦅',
+      'Frog': '🐸',
+      'Octopus': '🐙',
+      'Polar Bear': '🐻‍❄️',
+      'Wolf': '🐺',
+      'Hippopotamus': '🦛',
+      'Flamingo': '🦩',
+      'Peacock': '🦚',
+      'Tiger': '🐅',
+      'Monkey': '🐵',
+      'Snake': '🐍',
+      'Bat': '🦇',
+      'Sloth': '🦥',
+      'Armadillo': '🦦',
+      'Narwhal': '🦄',
+      'Bee': '🐝'
+    };
+    return emojiMap[animalName] || '🐾';
+  };
+
   useEffect(() => {
     if (isOpen) {
       resetGame();
@@ -75,12 +112,10 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
     setLearningMode(gameType === 'learning');
 
     if (gameType === 'learning') {
-      const randomAnimal = animalDatabase.getRandomAnimals(1)[0];
-      setCurrentAnimal(randomAnimal);
+      // Show animal selection screen instead of random animal
       setGameState(prev => ({
         ...prev,
-        gameState: 'learning',
-        currentAnimal: randomAnimal
+        gameState: 'animal-selection'
       }));
     } else {
       generateNewQuestion();
@@ -341,7 +376,10 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
           </div>
         </div>
 
-        <button className="explore-button" onClick={() => exploreAnimal(animal)}>
+        <button className="explore-button" onClick={() => {
+          // Show more detailed information or open a learning modal
+          alert(`More about ${animal.name}:\n\n${animal.funFacts.join('\n')}\n\nDid you know? ${animal.name}s can be found in ${animal.habitat} and they eat ${animal.diet}!`);
+        }}>
           Learn More
         </button>
       </div>
@@ -443,12 +481,15 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
             <div className="menu-options">
               <button onClick={() => startGame('quiz')} className="menu-button">
                 🧩 Animal Quiz
+                <small>Test your knowledge with fun questions!</small>
               </button>
               <button onClick={() => startGame('learning')} className="menu-button">
                 📚 Learn About Animals
+                <small>Choose any animal to explore and learn</small>
               </button>
               <button onClick={() => exploreAnimal(animalDatabase.getRandomAnimals(1)[0])} className="menu-button">
                 🎲 Random Animal
+                <small>Discover a surprise animal friend!</small>
               </button>
             </div>
 
@@ -487,15 +528,40 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
           </div>
         )}
 
+        {gameState.gameState === 'animal-selection' && (
+          <div className="animal-selection">
+            <div className="selection-header">
+              <h3>Choose an Animal to Learn About</h3>
+              <button
+                className="back-button"
+                onClick={() => setGameState(prev => ({ ...prev, gameState: 'menu' }))}
+              >
+                ← Back to Menu
+              </button>
+            </div>
+            <div className="animal-grid">
+              {animalDatabase.getAllAnimals().map((animal) => (
+                <button
+                  key={animal.id}
+                  className="animal-card-button"
+                  onClick={() => exploreAnimal(animal)}
+                >
+                  <div className="animal-card-emoji">{getAnimalEmoji(animal.name)}</div>
+                  <div className="animal-card-name">{animal.name}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {gameState.gameState === 'learning' && currentAnimal && (
           <div className="game-learning">
             <div className="learning-header">
               <h3>Learning about {currentAnimal.name}</h3>
               <button
                 className="new-animal-button"
-                onClick={() => exploreAnimal(animalDatabase.getRandomAnimals(1)[0])}
+                onClick={() => setGameState(prev => ({ ...prev, gameState: 'animal-selection' }))}
               >
-                🎲 Random Animal
+                ← Choose Different Animal
               </button>
             </div>
             {renderAnimalCard(currentAnimal)}

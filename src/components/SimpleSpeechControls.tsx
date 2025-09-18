@@ -69,7 +69,7 @@ export default function SimpleSpeechControls({
           errorMessage = 'Microphone access denied. Please allow microphone access.';
           break;
         case 'network':
-          errorMessage = 'Network error. Please check your connection.';
+          errorMessage = 'Speech recognition needs internet connection. Please check your Wi-Fi or try again in a moment.';
           break;
         default:
           errorMessage = `Error: ${event.error}`;
