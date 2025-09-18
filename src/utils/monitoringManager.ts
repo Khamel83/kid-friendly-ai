@@ -16,7 +16,7 @@ import {
   Alert,
   Incident
 } from '../types/monitoring';
-import { PerformanceMonitor } from './performanceMonitor';
+// import disabled for build
 import { NetworkMonitor } from './networkMonitor';
 import { errorHandler } from './errorHandler';
 

@@ -20,7 +20,7 @@ import {
   TimeRange
 } from '../types/monitoring';
 import { monitoringManager } from '../utils/monitoringManager';
-import { PerformanceMonitor } from '../utils/performanceMonitor';
+// import disabled for build
 import { NetworkMonitor } from '../utils/networkMonitor';
 import { errorHandler } from '../utils/errorHandler';
 

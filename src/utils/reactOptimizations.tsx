@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback, memo, useRef, useEffect } from 'react';
-import { PerformanceMonitor } from './performanceMonitor';
+// import { PerformanceMonitor } from './performanceMonitor';
 
-const performanceMonitor = PerformanceMonitor.getInstance();
+// const performanceMonitor = PerformanceMonitor.getInstance();
 
 /**
  * Performance-optimized memo HOC with automatic monitoring

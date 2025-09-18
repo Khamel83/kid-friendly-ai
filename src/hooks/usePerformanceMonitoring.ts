@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { PerformanceMonitor, WebVitalsMonitor, MemoryMonitor, NetworkMonitor } from '../utils/performanceMonitor';
+// import disabled for build
 
 interface PerformanceMetrics {
   fps: number;
