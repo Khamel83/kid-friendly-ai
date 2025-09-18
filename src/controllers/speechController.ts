@@ -68,8 +68,8 @@ export class SpeechController {
       autoLanguageDetection: true,
       continuous: false,
       interimResults: true,
-      maxRecordingDuration: 30,
-      silenceTimeout: 2,
+      maxRecordingDuration: 120, // Allow longer recordings for kids
+      silenceTimeout: 5, // Longer patience for kids
       privacyMode: 'cloud',
       ...config
     };

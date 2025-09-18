@@ -74,7 +74,7 @@ const SpeechControls: React.FC<SpeechControlsProps> = ({
   const [settings, setSettings] = useState<SpeechSettings>({
     language: initialLanguage,
     privacyMode: 'cloud',
-    continuous: false,
+    continuous: true, // Make it continuous for better kid experience
     noiseReduction: 0.5,
     voiceThreshold: 0.3,
     volume: 1.0,
@@ -96,8 +96,8 @@ const SpeechControls: React.FC<SpeechControlsProps> = ({
     {
       continuous: settings.continuous,
       interimResults: true,
-      maxRecordingDuration: 30,
-      silenceTimeout: 2,
+      maxRecordingDuration: 120, // Much longer recording time
+      silenceTimeout: 5, // Longer silence timeout
       autoStart: false,
       onResult: (result) => onResult?.(result.transcript),
       onError: (error) => onError?.(error.message),

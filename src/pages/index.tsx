@@ -48,8 +48,8 @@ export default function Home() {
   const [showPatternPuzzleGame, setShowPatternPuzzleGame] = useState(false);
   const [showAnimalGame, setShowAnimalGame] = useState(false);
 
-  // Enhanced speech states
-  const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
+  // Settings state
+  const [showSettings, setShowSettings] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [privacyMode, setPrivacyMode] = useState<'local' | 'cloud'>('cloud');
 
@@ -850,13 +850,103 @@ export default function Home() {
 
 
   
-      {/* Left Sidebar for Controls */}
-      <aside className="sidebar">
-        <h1 className="title">AI Buddy</h1>
+      {/* Settings Gear Icon */}
+      <button
+        className="settings-gear"
+        onClick={() => setShowSettings(!showSettings)}
+        aria-label="Settings"
+      >
+        ⚙️
+      </button>
 
-        {/* Character Companion */}
-        <div className="character-container">
-          <CharacterCompanion state={characterState} size={100} />
+      {/* Settings Panel (Hidden by default) */}
+      {showSettings && (
+        <div className="settings-panel">
+          <div className="settings-header">
+            <h3>Settings</h3>
+            <button onClick={() => setShowSettings(false)} className="close-settings">✕</button>
+          </div>
+
+          {/* Sound Controls */}
+          <div className="settings-section">
+            <h4>🔊 Sound</h4>
+            <div className="setting-item">
+              <label>Volume</label>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={masterVolume * 100}
+                onChange={(e) => setMasterVolume(parseInt(e.target.value) / 100)}
+              />
+            </div>
+            <button
+              className="setting-button"
+              onClick={() => setShowSoundControls(!showSoundControls)}
+            >
+              {showSoundControls ? 'Hide Sound Controls' : 'Sound Controls'}
+            </button>
+          </div>
+
+          {/* Voice Settings */}
+          <div className="settings-section">
+            <h4>🎙️ Voice</h4>
+            <div className="setting-item">
+              <label>Language</label>
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+              >
+                <option value="en-US">English</option>
+                <option value="es-ES">Español</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Game Selection */}
+          <div className="settings-section">
+            <h4>🎮 Games</h4>
+            <button
+              className={`game-select-button ${showGame ? 'active' : ''}`}
+              onClick={() => {
+                setShowGame(!showGame);
+                setShowPatternPuzzleGame(false);
+                setShowAnimalGame(false);
+              }}
+            >
+              Math Game 🧮
+            </button>
+            <button
+              className={`game-select-button ${showPatternPuzzleGame ? 'active' : ''}`}
+              onClick={() => {
+                setShowPatternPuzzleGame(!showPatternPuzzleGame);
+                setShowGame(false);
+                setShowAnimalGame(false);
+              }}
+            >
+              Pattern Puzzles 🧩
+            </button>
+            <button
+              className={`game-select-button ${showAnimalGame ? 'active' : ''}`}
+              onClick={() => {
+                setShowAnimalGame(!showAnimalGame);
+                setShowGame(false);
+                setShowPatternPuzzleGame(false);
+              }}
+            >
+              Animal Adventure 🦁
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="main-app-container">
+        {/* Character and Stars */}
+        <div className="character-section">
+          <CharacterCompanion state={characterState} size={120} />
           <div className="stars-display">
             {[...Array(stars)].map((_, i) => (
               <span key={i} className="star">⭐</span>
@@ -864,8 +954,9 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="controls-area">
-          {/* Enhanced Speech Controls */}
+        {/* Simple Controls */}
+        <div className="simple-controls">
+          {/* Talk Button */}
           <SpeechControls
             onResult={handleQuestionSubmit}
             onError={setErrorMessage}
@@ -876,228 +967,92 @@ export default function Home() {
               }
             }}
             initialLanguage={selectedLanguage}
-            showSettings={true}
+            showSettings={false}
             childFriendly={true}
             animateButtons={true}
-            compact={false}
+            compact={true}
             theme="auto"
-            className="enhanced-speech-controls"
+            className="simple-speech-controls"
           />
-          {/* Enhanced Speech Settings */}
-          {speechSettingsOpen && (
-            <div className="speech-settings-panel">
-              <h3>Speech Settings</h3>
-              <div className="setting-item">
-                <label>Language</label>
-                <select
-                  value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
-                >
-                  <option value="en-US">English</option>
-                  <option value="es-ES">Español</option>
-                  <option value="fr-FR">Français</option>
-                  <option value="de-DE">Deutsch</option>
-                  <option value="zh-CN">中文</option>
-                </select>
-              </div>
-              <div className="setting-item">
-                <label>Privacy Mode</label>
-                <div className="toggle-group">
-                  <button
-                    className={`toggle-btn ${privacyMode === 'local' ? 'active' : ''}`}
-                    onClick={() => setPrivacyMode('local')}
-                  >
-                    Local 🔒
-                  </button>
-                  <button
-                    className={`toggle-btn ${privacyMode === 'cloud' ? 'active' : ''}`}
-                    onClick={() => setPrivacyMode('cloud')}
-                  >
-                    Cloud ☁️
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* --- Render Separate Stop Speaking Button --- */}
+          {/* Stop Button */}
           <button
-              className="control-button stop-speaking-button"
-              onClick={handleStopSpeaking}
-              disabled={!isProcessing && !isSpeaking}
-              aria-label="Stop"
+            className="simple-stop-button"
+            onClick={handleStopSpeaking}
+            disabled={!isProcessing && !isSpeaking}
+            aria-label="Stop"
           >
-              Stop {/* Simple "Stop" covers both thinking and speaking */}
+            ⏹️ Stop
           </button>
-          {/* --- End Render Separate Stop Speaking Button --- */}
-
-          {/* Sound Controls Button */}
-          <button
-              className="control-button sound-button"
-              onClick={() => setShowSoundControls(!showSoundControls)}
-              disabled={isProcessing || isSpeaking}
-              aria-label="Toggle Sound Controls"
-          >
-              {showSoundControls ? 'Hide Sound 🔇' : 'Sound Controls 🔊'}
-          </button>
-
-          {/* Mini Game Button */}
-          <button
-              className="control-button game-button"
-              onClick={() => setShowGame(!showGame)}
-              disabled={isProcessing || isSpeaking}
-              aria-label="Toggle Game"
-          >
-              {showGame ? 'Back to Chat 💬' : 'Play Game 🎮'}
-          </button>
-
-          {/* Pattern Puzzle Game Button */}
-          <button
-              className="control-button pattern-button"
-              onClick={() => setShowPatternPuzzleGame(!showPatternPuzzleGame)}
-              disabled={isProcessing || isSpeaking}
-              aria-label="Toggle Pattern Puzzle Game"
-          >
-              {showPatternPuzzleGame ? 'Back to Chat 💬' : 'Pattern Puzzles 🧩'}
-          </button>
-
-          {/* Animal Game Button */}
-          <button
-              className="control-button animal-button"
-              onClick={() => setShowAnimalGame(!showAnimalGame)}
-              disabled={isProcessing || isSpeaking}
-              aria-label="Toggle Animal Game"
-          >
-              {showAnimalGame ? 'Back to Chat 💬' : 'Animal Adventure 🦁'}
-          </button>
-          {/* --- End Mini Game Button --- */}
 
           {errorMessage && (
-            <div className="error-container sidebar-error">
+            <div className="simple-error">
               <p>{errorMessage}</p>
             </div>
           )}
         </div>
-      </aside>
 
-      {/* Right Main Area for Chat */}
-      <main className="main-content">
-        {showSoundControls ? (
-          <div className="sound-controls-container">
-            <SoundControls
-              compact={false}
-              showLibrary={true}
-              showAccessibility={true}
-              showParentalControls={true}
-              onVolumeChange={setMasterVolume}
-              onMuteToggle={toggleMute}
-            />
-          </div>
-        ) : showGame ? (
-          <div className="game-container">
-            <MiniGame onComplete={() => setShowGame(false)} />
-          </div>
-        ) : showPatternPuzzleGame ? (
-          <div className="game-container">
-            <PatternPuzzleGame
-              isOpen={showPatternPuzzleGame}
-              onClose={() => setShowPatternPuzzleGame(false)}
-              onStickerEarned={(stickerId) => {
-                // Handle sticker earned from pattern puzzle game
-                console.log('Sticker earned:', stickerId);
-              }}
-            />
-          </div>
-        ) : showAnimalGame ? (
-          <div className="game-container">
-            <AnimalGame
-              isOpen={showAnimalGame}
-              onClose={() => setShowAnimalGame(false)}
-              onStickerEarned={(stickerId) => {
-                // Handle sticker earned from animal game
-                console.log('Animal sticker earned:', stickerId);
-              }}
-            />
-          </div>
-        ) : (
-          <div className="chat-history-container">
-            <div className="chat-history" ref={chatHistoryRef}>
-              {conversationHistory.length === 0 && !isProcessing && (
-                <p className="empty-chat-message">Press the green &apos;Talk&apos; button to start!</p>
-              )}
-              {conversationHistory.map((msg, index) => (
-                <div key={index} className={`chat-message ${msg.type}`}>
-                  <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
-                  <p>{msg.text}</p>
-                </div>
-              ))}
-              {/* Show loading dots only while text stream is active */}
-              {(isProcessing || (isSpeaking && conversationHistory[conversationHistory.length - 1]?.type === 'ai')) && (
-                <div className="chat-message ai loading-dots">
-                  <span></span><span></span><span></span>
-                </div>
-              )}
+        {/* Chat Area */}
+        <div className="chat-container">
+          {showSoundControls ? (
+            <div className="sound-controls-container">
+              <SoundControls
+                compact={false}
+                showLibrary={true}
+                showAccessibility={true}
+                showParentalControls={true}
+                onVolumeChange={setMasterVolume}
+                onMuteToggle={toggleMute}
+              />
             </div>
-          </div>
-        )}
-      </main>
-
-      {/* Fixed Action Bar */}
-      <div className="fixed-action-bar">
-        <button
-          className="action-button"
-          onClick={() => {
-            // Trigger speech controls
-            const speechButton = document.querySelector('.speech-button') as HTMLButtonElement;
-            if (speechButton) speechButton.click();
-          }}
-          disabled={isProcessing || isSpeaking || isMuted}
-          aria-label={isListening ? "Stop recording" : "Start talking"}
-          title={isListening ? "Stop recording" : "Start talking"}
-        >
-          {isListening ? '⏹️' : '🎤'}
-        </button>
-
-        <button
-          className="action-button"
-          onClick={readLastResponse}
-          disabled={!lastAiResponse.trim() || isMuted || isSpeaking || isProcessing}
-          aria-label="Read last response aloud"
-          title="Read last response aloud"
-        >
-          🔊
-        </button>
-
-        <button
-          className="action-button"
-          onClick={toggleMute}
-          aria-label={isMuted ? "Unmute audio" : "Mute audio"}
-          title={isMuted ? "Unmute audio" : "Mute audio"}
-        >
-          {isMuted ? '🔇' : '🔊'}
-        </button>
-
-        <button
-          className="action-button"
-          onClick={() => {
-            if (showSoundControls) {
-              setShowSoundControls(false);
-            } else if (showGame) {
-              setShowGame(false);
-            } else if (showPatternPuzzleGame) {
-              setShowPatternPuzzleGame(false);
-            } else if (showAnimalGame) {
-              setShowAnimalGame(false);
-            }
-          }}
-          disabled={!showSoundControls && !showGame && !showPatternPuzzleGame && !showAnimalGame}
-          aria-label="Back to chat"
-          title="Back to chat"
-        >
-          ↩️
-        </button>
+          ) : showGame ? (
+            <div className="game-container">
+              <MiniGame onComplete={() => setShowGame(false)} />
+            </div>
+          ) : showPatternPuzzleGame ? (
+            <div className="game-container">
+              <PatternPuzzleGame
+                isOpen={showPatternPuzzleGame}
+                onClose={() => setShowPatternPuzzleGame(false)}
+                onStickerEarned={(stickerId) => {
+                  console.log('Sticker earned:', stickerId);
+                }}
+              />
+            </div>
+          ) : showAnimalGame ? (
+            <div className="game-container">
+              <AnimalGame
+                isOpen={showAnimalGame}
+                onClose={() => setShowAnimalGame(false)}
+                onStickerEarned={(stickerId) => {
+                  console.log('Animal sticker earned:', stickerId);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="chat-history-container">
+              <div className="chat-history" ref={chatHistoryRef}>
+                {conversationHistory.length === 0 && !isProcessing && (
+                  <p className="empty-chat-message">Press the Talk button to start!</p>
+                )}
+                {conversationHistory.map((msg, index) => (
+                  <div key={index} className={`chat-message ${msg.type}`}>
+                    <span className="chat-label">{msg.type === 'user' ? 'You:' : 'Buddy:'}</span>
+                    <p>{msg.text}</p>
+                  </div>
+                ))}
+                {(isProcessing || (isSpeaking && conversationHistory[conversationHistory.length - 1]?.type === 'ai')) && (
+                  <div className="chat-message ai loading-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
+  
       {/* Visual Effects */}
       {showConfetti && (
         <div className="confetti-overlay">
