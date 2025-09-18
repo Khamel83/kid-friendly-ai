@@ -1,14 +1,41 @@
-# Kid-Friendly AI Assistant 🤖✨
+# Kid-Friendly AI Buddy 🤖✨
 
-![CI/CD Pipeline](https://github.com/Khamel83/kid-friendly-ai/workflows/Continuous%20Integration/badge.svg)
-![Code Quality](https://github.com/Khamel83/kid-friendly-ai/workflows/Code%20Quality/badge.svg)
-![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
-![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
-![License](https://img.shields.io/badge/license-MIT-blue)
+A safe, interactive, and educational AI companion designed specifically for children aged 6-12. Built with modern web technologies and child-friendly interfaces.
 
-A super fun and interactive AI companion designed specifically for kids! This engaging web application combines voice interaction with playful animations, games, and rewards to make learning an adventure.
+## 🌟 Project Overview
 
-## 🌟 Amazing Features
+Kid-Friendly AI Buddy is an innovative web application that provides children with a safe, engaging, and educational AI companion. The application features voice interaction, educational games, parental controls, and a colorful, intuitive interface designed specifically for young users.
+
+### 🎯 Mission
+
+Our mission is to create a safe digital environment where children can explore, learn, and grow with AI technology while ensuring privacy, security, and age-appropriate content.
+
+## ✨ Key Features
+
+### 🎙️ Voice Interaction
+- **Speech Recognition**: Natural conversation with AI companion
+- **Text-to-Speech**: AI responses read aloud with child-friendly voices
+- **Multi-language Support**: English, Spanish, French, German, and Chinese
+- **Privacy Controls**: Local and cloud processing options
+
+### 🎮 Educational Games
+- **Mini-Games**: Interactive learning activities
+- **Pattern Puzzles**: Cognitive skill development
+- **Animal Adventure**: Wildlife education and exploration
+- **Sticker Collection**: Reward system for engagement
+
+### 🛡️ Safety Features
+- **Content Filtering**: Age-appropriate responses only
+- **Parental Controls**: Comprehensive monitoring and controls
+- **Privacy Protection**: COPPA and GDPR compliant
+- **Offline Mode**: Works without internet connection
+- **No Data Collection**: Minimal data footprint
+
+### 🎨 User Experience
+- **Colorful Interface**: Engaging visual design for children
+- **Character Companion**: Animated AI buddy with emotions
+- **Accessibility Features**: Support for various learning needs
+- **Responsive Design**: Works on tablets, phones, and computers
 
 ### 🎨 Visual & Interactive Elements
 - **Animated Robot Buddy**: Friendly character with different expressions and animations
@@ -33,6 +60,45 @@ A super fun and interactive AI companion designed specifically for kids! This en
 - **Cross-Platform**: Works perfectly on Chromebooks, Android tablets, iPhone, and Safari
 - **Mobile-Friendly**: Optimized touch interactions and responsive design
 - **No Data Storage**: Completely ephemeral - no personal data saved
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- npm or yarn
+- Modern web browser
+- OpenRouter API key
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Khamel83/kid-friendly-ai.git
+   cd kid-friendly-ai
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your API keys:
+   ```env
+   OPENROUTER_API_KEY=your_openrouter_api_key
+   NEXT_PUBLIC_SITE_URL=http://localhost:3000
+   ```
+
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
+
+5. **Open your browser**
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## 🎯 How It Works
 
