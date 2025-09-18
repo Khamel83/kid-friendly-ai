@@ -50,15 +50,45 @@ const animals = [
 export default function MiniGame({ onComplete }: MiniGameProps) {
   const [currentAnimal, setCurrentAnimal] = useState(0);
   const [hintIndex, setHintIndex] = useState(0);
-  const [gameState, setGameState] = useState<'playing' | 'won' | 'gaveUp'>('playing');
+  const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
   const [score, setScore] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const currentGame = animals[currentAnimal];
 
-  const handleGuess = (guess: string) => {
-    if (guess.toLowerCase() === currentGame.name.toLowerCase()) {
+  // Generate multiple choice options (correct answer + 3 wrong ones)
+  const getOptions = () => {
+    const correctAnswer = currentGame.name;
+    const wrongAnswers = animals
+      .filter(animal => animal.name !== correctAnswer)
+      .map(animal => animal.name)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3);
+
+    const allOptions = [correctAnswer, ...wrongAnswers].sort(() => Math.random() - 0.5);
+    return allOptions;
+  };
+
+  const [options, setOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    setOptions(getOptions());
+    setHintIndex(0);
+    setGameState('playing');
+    setSelectedAnswer(null);
+    setShowFeedback(false);
+  }, [currentAnimal]);
+
+  const handleAnswer = (answer: string) => {
+    setSelectedAnswer(answer);
+    setShowFeedback(true);
+
+    if (answer.toLowerCase() === currentGame.name.toLowerCase()) {
       setGameState('won');
       setScore(prev => prev + (5 - hintIndex)); // More points for fewer hints
+    } else {
+      setGameState('lost');
     }
   };
 
@@ -68,14 +98,8 @@ export default function MiniGame({ onComplete }: MiniGameProps) {
     }
   };
 
-  const giveUp = () => {
-    setGameState('gaveUp');
-  };
-
   const nextAnimal = () => {
     setCurrentAnimal(prev => (prev + 1) % animals.length);
-    setHintIndex(0);
-    setGameState('playing');
   };
 
   const finishGame = () => {
@@ -85,80 +109,77 @@ export default function MiniGame({ onComplete }: MiniGameProps) {
   return (
     <div className="mini-game">
       <div className="game-header">
-        <h3>🎮 Guess the Animal Game! 🎮</h3>
+        <h3>🐾 Guess the Animal! 🐾</h3>
         <div className="score">Stars: ⭐{score}</div>
+        <button onClick={finishGame} className="back-button">
+          ← Back to Buddy
+        </button>
       </div>
 
       <div className="game-content">
         <div className="animal-emoji" style={{ fontSize: '4rem' }}>
-          {gameState === 'playing' ? '❓' : currentGame.emoji}
+          {gameState !== 'playing' ? currentGame.emoji : '❓'}
         </div>
 
         {gameState === 'playing' && (
           <div className="hints-section">
-            <p className="hint-label">Here are your clues:</p>
+            <p className="hint-label">💡 Clues:</p>
             <div className="hints-list">
               {currentGame.hints.slice(0, hintIndex + 1).map((hint, index) => (
                 <div key={index} className="hint-item">
-                  💡 {hint}
+                  {hint}
                 </div>
               ))}
             </div>
 
-            <div className="game-controls">
-              {hintIndex < currentGame.hints.length - 1 && (
-                <button onClick={nextHint} className="game-button hint-button">
-                  Need Another Hint? 💭
-                </button>
-              )}
-
-              <div className="guess-input">
-                <input
-                  type="text"
-                  placeholder="What animal am I? 🤔"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleGuess((e.target as HTMLInputElement).value);
-                    }
-                  }}
-                  className="guess-input-field"
-                />
-                <button
-                  onClick={() => handleGuess((document.querySelector('.guess-input-field') as HTMLInputElement)?.value || '')}
-                  className="game-button guess-button"
-                >
-                  Guess! 🎯
-                </button>
-              </div>
-
-              <button onClick={giveUp} className="game-button giveup-button">
-                Tell Me! 🙈
+            {hintIndex < currentGame.hints.length - 1 && (
+              <button onClick={nextHint} className="hint-button">
+                Need Another Clue?
               </button>
+            )}
+
+            <div className="multiple-choice">
+              <p className="question-text">What animal am I?</p>
+              <div className="options-grid">
+                {options.map((option, index) => (
+                  <button
+                    key={index}
+                    onClick={() => !showFeedback && handleAnswer(option)}
+                    disabled={showFeedback}
+                    className={`option-button ${
+                      showFeedback && option.toLowerCase() === currentGame.name.toLowerCase()
+                        ? 'correct'
+                        : showFeedback && selectedAnswer === option
+                        ? 'incorrect'
+                        : ''
+                    }`}
+                  >
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {(gameState === 'won' || gameState === 'gaveUp') && (
-          <div className="result-section">
-            <h4 className="result-title">
-              {gameState === 'won' ? '🎉 You Got It! 🎉' : '🤔 It Was...'}
+        {showFeedback && (
+          <div className="feedback-section">
+            <h4 className={`feedback-title ${gameState === 'won' ? 'correct' : 'incorrect'}`}>
+              {gameState === 'won' ? '🎉 Correct! 🎉' : '❌ Not Quite! ❌'}
             </h4>
-            <p className="result-animal">
-              {currentGame.emoji} {currentGame.name.charAt(0).toUpperCase() + currentGame.name.slice(1)}!
+            <p className="feedback-animal">
+              It's a {currentGame.emoji} {currentGame.name.charAt(0).toUpperCase() + currentGame.name.slice(1)}!
             </p>
-            <p className="result-message">
+            <p className="feedback-message">
               {gameState === 'won'
                 ? 'Amazing job! You\'re a super detective! 🕵️‍♂️✨'
-                : 'That\'s okay! You\'ll get it next time! 🌟'
+                : `Don't worry! The answer was ${currentGame.name}. Try the next one! 🌟`
               }
             </p>
 
-            <div className="result-controls">
-              <button onClick={nextAnimal} className="game-button next-button">
-                Next Animal! 🐾
-              </button>
-              <button onClick={finishGame} className="game-button finish-button">
-                Back to Buddy! 🤖
+            <div className="feedback-controls">
+              <button onClick={nextAnimal} className="next-button">
+                Next Animal →
               </button>
             </div>
           </div>

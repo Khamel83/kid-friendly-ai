@@ -797,32 +797,330 @@ a {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
 }
 
-.guess-input {
-  display: flex;
+/* Multiple Choice Styles */
+.multiple-choice {
+  width: 100%;
+  margin: 1.5rem 0;
+}
+
+.question-text {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
   width: 100%;
-  max-width: 400px;
+}
+
+.option-button {
+  padding: 1rem;
+  border: 3px solid var(--secondary-color);
+  border-radius: 15px;
+  background: white;
+  font-family: var(--fun-font);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.option-button:hover:not(:disabled) {
+  background: var(--secondary-color);
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.option-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.option-button.correct {
+  background: var(--success-color);
+  color: white;
+  border-color: var(--success-color);
+}
+
+.option-button.incorrect {
+  background: var(--error-color);
+  color: white;
+  border-color: var(--error-color);
+}
+
+.hint-button {
+  padding: 0.8rem 1.5rem;
+  border: 2px solid var(--warning-color);
+  border-radius: 20px;
+  background: var(--warning-color);
+  color: white;
+  font-family: var(--fun-font);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
   margin: 1rem 0;
 }
 
-.guess-input-field {
-  flex: 1;
-  padding: 1rem;
-  border: 2px solid var(--secondary-color);
-  border-radius: 20px;
-  font-size: 1rem;
+.hint-button:hover {
+  background: #ffc107;
+  transform: translateY(-1px);
+}
+
+.back-button {
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--primary-color);
+  border-radius: 15px;
+  background: var(--primary-color);
+  color: white;
   font-family: var(--fun-font);
-  outline: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.3s ease;
 }
 
-.guess-input-field:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.2);
+.back-button:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
 }
 
-.result-section {
+.feedback-section {
   text-align: center;
+  padding: 1rem;
+}
+
+.feedback-title {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+}
+
+.feedback-title.correct {
+  color: var(--success-color);
+}
+
+.feedback-title.incorrect {
+  color: var(--error-color);
+}
+
+.feedback-animal {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  font-weight: 700;
+}
+
+.feedback-message {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.feedback-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.next-button {
+  padding: 1rem 2rem;
+  border: 3px solid var(--success-color);
+  border-radius: 20px;
+  background: var(--success-color);
+  color: white;
+  font-family: var(--fun-font);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.next-button:hover {
+  background: #7dd3c0;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Pattern Puzzle Game Styles */
+.pattern-puzzle-game {
+  width: 100%;
+  max-width: 600px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 255, 0.95) 100%);
+  backdrop-filter: blur(10px);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--secondary-color);
+}
+
+.puzzle-section {
+  text-align: center;
+}
+
+.puzzle-question h4 {
+  font-size: 1.4rem;
+  color: var(--primary-dark);
+  margin-bottom: 2rem;
+}
+
+.pattern-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0;
+  flex-wrap: wrap;
+}
+
+.pattern-item {
+  font-size: 3rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 15px;
+  border: 2px solid var(--accent-color);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pattern-item.question-mark {
+  background: var(--warning-color);
+  color: white;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.puzzle-options {
+  margin: 2rem 0;
+}
+
+.puzzle-options p {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary-dark);
+  margin-bottom: 1.5rem;
+}
+
+.pattern-puzzle-game .option-button {
+  font-size: 2rem;
+  padding: 1.5rem;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pattern-puzzle-game .option-button:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.05);
+}
+
+.pattern-puzzle-game .option-button.selected {
+  border-color: var(--primary-color);
+  background: rgba(255, 107, 107, 0.1);
+}
+
+/* Math Game Styles */
+.math-game {
+  width: 100%;
+  max-width: 600px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 255, 0.95) 100%);
+  backdrop-filter: blur(10px);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--primary-color);
+}
+
+.score-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.streak {
+  color: var(--warning-color);
+  font-weight: 700;
+}
+
+.question-section {
+  text-align: center;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.question-emoji {
+  font-size: 3rem;
+}
+
+.difficulty-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: white;
+}
+
+.difficulty-badge.easy {
+  background: var(--success-color);
+}
+
+.difficulty-badge.medium {
+  background: var(--warning-color);
+}
+
+.difficulty-badge.hard {
+  background: var(--error-color);
+}
+
+.question-text h4 {
+  font-size: 1.8rem;
+  color: var(--primary-dark);
+  margin-bottom: 2rem;
+}
+
+.math-game .option-button {
+  font-size: 1.5rem;
+  padding: 1.5rem;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.math-game .option-button:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.05);
+}
+
+.math-game .option-button.selected {
+  border-color: var(--primary-color);
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.fun-fact {
+  background: rgba(255, 230, 109, 0.2);
+  padding: 1rem;
+  border-radius: 15px;
+  margin: 1rem 0;
+  border-left: 4px solid var(--accent-color);
+}
+
+.fun-fact p {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-color);
 }
 
 .result-title {
@@ -868,6 +1166,14 @@ a {
   }
 
   .result-controls {
+    flex-direction: column;
+  }
+
+  .options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback-controls {
     flex-direction: column;
   }
 }
