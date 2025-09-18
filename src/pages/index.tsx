@@ -14,8 +14,7 @@ import { SoundAccessibilityManager } from '../utils/soundAccessibility';
 import { register } from '../utils/registerServiceWorker';
 import { AccessibilityUtils } from '../utils/accessibility';
 import { Buffer } from 'buffer'; // Needed for sentence detection buffer
-import '../styles/enhancedSpeechControls.css';
-import '../styles/offlineIndicator.css';
+// CSS imports moved to _app.tsx
 
 interface Message {
   type: 'user' | 'ai';

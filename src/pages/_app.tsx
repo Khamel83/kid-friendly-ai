@@ -2,6 +2,7 @@ import '../styles/globals.css';
 import '../styles/patternPuzzleGame.css';
 import '../styles/animalGame.css';
 import '../styles/offlineIndicator.css';
+import '../styles/enhancedSpeechControls.css';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 

@@ -200,12 +200,12 @@ export class DynamicImportManager {
     const startTime = performance.now();
 
     try {
-      const module = await import(/* webpackChunkName: "[request]" */ modulePath);
+      const importedModule = await import(/* webpackChunkName: "[request]" */ modulePath);
       const loadTime = performance.now() - startTime;
 
       console.log(`Dynamic import of ${modulePath} took ${loadTime.toFixed(2)}ms`);
 
-      return module as T;
+      return importedModule as T;
     } catch (error) {
       console.error(`Failed to dynamically import ${modulePath}:`, error);
       throw error;

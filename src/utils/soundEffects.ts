@@ -9,7 +9,7 @@ import { EnhancedSoundManager } from './soundManager';
 import { SoundEffectConfig } from '../types/sound';
 
 // Export the enhanced manager as the default SoundManager for backward compatibility
-export { EnhancedSoundManager as SoundManager };
+// Export will be at the end of file
 
 // Re-export any other needed functions for backward compatibility
 export const getInstance = () => EnhancedSoundManager.getInstance();
@@ -62,3 +62,5 @@ export class SoundManager extends EnhancedSoundManager {
   playCheer() { this.play('cheer', 0.5); }
   playError() { this.play('error', 0.3); }
 }
+
+// Export the SoundManager class (this is the only export)

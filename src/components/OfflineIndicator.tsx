@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import type { OfflineIndicatorProps, ConnectionQuality } from '../types/offline';
 import { useOfflineManager } from '../hooks/useOfflineManager';
-import '../styles/offlineIndicator.css';
+// CSS import moved to _app.tsx
 
 interface SyncStatus {
   isSyncing: boolean;
