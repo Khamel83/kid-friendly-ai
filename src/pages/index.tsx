@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
-import SpeechControls from '../components/SimpleSpeechControls';
+import SpeechControls from '../components/SpeechControls';
 import CharacterCompanion from '../components/CharacterCompanion';
 import MiniGame from '../components/MiniGame';
 import MathGame from '../components/MathGame';
