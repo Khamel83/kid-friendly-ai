@@ -780,15 +780,16 @@ a {
 
 .game-button {
   background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-  color: white;
+  color: white !important;
   border: none;
   border-radius: 25px;
   padding: 1rem 2rem;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
   min-width: 200px;
 }
 
@@ -825,9 +826,10 @@ a {
   background: white;
   font-family: var(--fun-font);
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
+  color: var(--text-color) !important;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -879,10 +881,11 @@ a {
   border: 2px solid var(--primary-color);
   border-radius: 15px;
   background: var(--primary-color);
-  color: white;
+  color: white !important;
   font-family: var(--fun-font);
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -933,10 +936,11 @@ a {
   border: 3px solid var(--success-color);
   border-radius: 20px;
   background: var(--success-color);
-  color: white;
+  color: white !important;
   font-family: var(--fun-font);
   font-size: 1.1rem;
   font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1347,6 +1351,7 @@ a {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  color: var(--text-color) !important;
   text-align: center;
 }
 
@@ -1354,6 +1359,7 @@ a {
   background: linear-gradient(135deg, var(--accent-color) 0%, #ffd93d 100%);
   transform: translateY(-2px);
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  color: var(--text-color) !important;
 }
 
 .game-button:active {
@@ -1651,6 +1657,8 @@ a {
   transition: all 0.3s ease;
   text-align: center;
   min-height: 80px;
+  color: var(--text-color) !important;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1841,13 +1849,14 @@ a {
 }
 
 .back-button {
-  background: var(--text-secondary);
-  color: white;
+  background: var(--primary-color);
+  color: white !important;
   border: none;
   border-radius: 15px;
   padding: 1rem 1.5rem;
   font-size: 1rem;
-  font-weight: bold;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   transition: all 0.3s ease;
   margin-top: 2rem;
