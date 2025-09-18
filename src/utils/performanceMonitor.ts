@@ -2,6 +2,8 @@
  * Performance monitoring utilities for the Kid-Friendly AI Assistant
  */
 
+import React from 'react';
+
 export interface PerformanceMetric {
   name: string;
   value: number;
