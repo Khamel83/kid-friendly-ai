@@ -3,6 +3,7 @@ import Head from 'next/head';
 import SpeechControls from '../components/SpeechControls';
 import CharacterCompanion from '../components/CharacterCompanion';
 import MiniGame from '../components/MiniGame';
+import MathGame from '../components/MathGame';
 import PatternPuzzleGame from '../components/PatternPuzzleGame';
 import AnimalGame from '../components/AnimalGame';
 import SoundControls from '../components/SoundControls';
@@ -44,7 +45,8 @@ export default function Home() {
   const [stars, setStars] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const [particles, setParticles] = useState<Array<{id: number, x: number, y: number, color: string}>>([]);
-  const [showGame, setShowGame] = useState(false);
+  const [showMiniGame, setShowMiniGame] = useState(false);
+  const [showMathGame, setShowMathGame] = useState(false);
   const [showPatternPuzzleGame, setShowPatternPuzzleGame] = useState(false);
   const [showAnimalGame, setShowAnimalGame] = useState(false);
 
@@ -905,40 +907,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Game Selection */}
-          <div className="settings-section">
-            <h4>🎮 Games</h4>
-            <button
-              className={`game-select-button ${showGame ? 'active' : ''}`}
-              onClick={() => {
-                setShowGame(!showGame);
-                setShowPatternPuzzleGame(false);
-                setShowAnimalGame(false);
-              }}
-            >
-              Math Game 🧮
-            </button>
-            <button
-              className={`game-select-button ${showPatternPuzzleGame ? 'active' : ''}`}
-              onClick={() => {
-                setShowPatternPuzzleGame(!showPatternPuzzleGame);
-                setShowGame(false);
-                setShowAnimalGame(false);
-              }}
-            >
-              Pattern Puzzles 🧩
-            </button>
-            <button
-              className={`game-select-button ${showAnimalGame ? 'active' : ''}`}
-              onClick={() => {
-                setShowAnimalGame(!showAnimalGame);
-                setShowGame(false);
-                setShowPatternPuzzleGame(false);
-              }}
-            >
-              Animal Adventure 🦁
-            </button>
-          </div>
         </div>
       )}
 
@@ -952,6 +920,54 @@ export default function Home() {
               <span key={i} className="star">⭐</span>
             ))}
           </div>
+        </div>
+
+        {/* Game Buttons */}
+        <div className="game-buttons-container">
+          <button
+            className="game-button"
+            onClick={() => {
+              setShowMiniGame(!showMiniGame);
+              setShowMathGame(false);
+              setShowPatternPuzzleGame(false);
+              setShowAnimalGame(false);
+            }}
+          >
+            🐾 Animal Guessing
+          </button>
+          <button
+            className="game-button"
+            onClick={() => {
+              setShowMathGame(!showMathGame);
+              setShowMiniGame(false);
+              setShowPatternPuzzleGame(false);
+              setShowAnimalGame(false);
+            }}
+          >
+            🧮 Math Game
+          </button>
+          <button
+            className="game-button"
+            onClick={() => {
+              setShowPatternPuzzleGame(!showPatternPuzzleGame);
+              setShowMiniGame(false);
+              setShowMathGame(false);
+              setShowAnimalGame(false);
+            }}
+          >
+            🧩 Pattern Puzzles
+          </button>
+          <button
+            className="game-button"
+            onClick={() => {
+              setShowAnimalGame(!showAnimalGame);
+              setShowMiniGame(false);
+              setShowMathGame(false);
+              setShowPatternPuzzleGame(false);
+            }}
+          >
+            🦁 Animal Adventure
+          </button>
         </div>
 
         {/* Simple Controls */}
@@ -1005,9 +1021,18 @@ export default function Home() {
                 onMuteToggle={toggleMute}
               />
             </div>
-          ) : showGame ? (
+          ) : showMiniGame ? (
             <div className="game-container">
-              <MiniGame onComplete={() => setShowGame(false)} />
+              <MiniGame onComplete={() => setShowMiniGame(false)} />
+            </div>
+          ) : showMathGame ? (
+            <div className="game-container">
+              <MathGame
+                onComplete={() => setShowMathGame(false)}
+                onStickerEarned={(stickerId) => {
+                  console.log('Math sticker earned:', stickerId);
+                }}
+              />
             </div>
           ) : showPatternPuzzleGame ? (
             <div className="game-container">
