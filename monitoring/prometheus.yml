@@ -1,0 +1,112 @@
+# Prometheus configuration for kid-friendly-ai monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'kid-friendly-ai'
+
+# Rule files for alerting
+rule_files:
+  - "alert_rules.yml"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Next.js application metrics
+  - job_name: 'kid-friendly-ai-app'
+    static_configs:
+      - targets: ['app:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Nginx metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+
+  # Custom application metrics
+  - job_name: 'app-health'
+    static_configs:
+      - targets: ['app:3000']
+    metrics_path: '/health'
+    scrape_interval: 30s
+    scheme: http
+
+  # API endpoint monitoring
+  - job_name: 'api-monitoring'
+    static_configs:
+      - targets: ['app:3000']
+    metrics_path: '/api/health'
+    scrape_interval: 30s
+    scheme: http
+
+  # Blackbox exporter for external monitoring
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://kid-friendly-ai.com
+        - https://www.kid-friendly-ai.com
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Database monitoring (if applicable)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 15s
+
+  # Application performance monitoring
+  - job_name: 'app-performance'
+    static_configs:
+      - targets: ['app:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    params:
+      collect[]:
+        - memory
+        - cpu
+        - response_time
+        - error_rate
+        - active_connections

@@ -1,0 +1,215 @@
+{
+  "version": 2,
+  "name": "kid-friendly-ai",
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))",
+      "dest": "/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "src": "/(.*\\.webp)",
+      "dest": "/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "src": "/(.*\\.avif)",
+      "dest": "/$1",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable",
+        "x-content-type-options": "nosniff"
+      }
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/sw.js",
+      "headers": {
+        "cache-control": "public, max-age=0, must-revalidate",
+        "service-worker-allowed": "/"
+      }
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1",
+      "methods": ["GET", "POST", "OPTIONS"],
+      "headers": {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "Content-Type, Authorization",
+        "cache-control": "no-cache, no-store, must-revalidate"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1",
+      "headers": {
+        "x-frame-options": "DENY",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "origin-when-cross-origin",
+        "permissions-policy": "camera=(), microphone=(), geolocation=()"
+      }
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SITE_URL": "https://kid-friendly-ai.vercel.app",
+    "NEXT_PUBLIC_VERCEL_URL": "https://kid-friendly-ai.vercel.app",
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_SITE_URL": "https://kid-friendly-ai.vercel.app",
+      "NEXT_PUBLIC_VERCEL_URL": "https://kid-friendly-ai.vercel.app",
+      "NODE_ENV": "production"
+    }
+  },
+  "functions": {
+    "api/ask.ts": {
+      "maxDuration": 30,
+      "memory": 1024,
+      "runtime": "nodejs18.x"
+    },
+    "api/tts.ts": {
+      "maxDuration": 30,
+      "memory": 1024,
+      "runtime": "nodejs18.x"
+    },
+    "api/transcribe.ts": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "runtime": "nodejs18.x"
+    },
+    "api/health.ts": {
+      "maxDuration": 10,
+      "memory": 256,
+      "runtime": "nodejs18.x"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; media-src 'self' blob: https:; worker-src 'self' blob:; frame-src 'self'; form-action 'self'; base-uri 'self';"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=31536000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        },
+        {
+          "key": "Expires",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
+      "source": "/chat",
+      "destination": "/"
+    },
+    {
+      "source": "/ask",
+      "destination": "/api/ask"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/index",
+      "destination": "/",
+      "permanent": true
+    }
+  ],
+  "regions": ["iad1", "sfo1", "cdg1"],
+  "github": {
+    "silent": true,
+    "autoJobCancelation": true
+  },
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 # Verification Matrix
 
-**Spec Run**: auto/spec-run-20250917T163219Z
+**Spec Run**: auto/spec-run-20250917T215424Z
 **Spec SHA256**: eae2a8495567002f8cd43c7205c56beb5a2114a7c600e198a9eebf5b017dc80b
+**Base Commit**: 608c301
 
 ## Task Verification Status
 

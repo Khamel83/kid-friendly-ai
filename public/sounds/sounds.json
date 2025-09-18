@@ -1,0 +1,218 @@
+{
+  "version": "1.0.0",
+  "name": "Kid-Friendly AI Sound Library",
+  "description": "Comprehensive sound effects library for the Kid-Friendly AI application",
+  "categories": [
+    {
+      "name": "ui",
+      "description": "User interface sounds",
+      "sounds": [
+        {
+          "id": "ui_click",
+          "name": "Click Sound",
+          "file": "ui/click.mp3",
+          "category": "ui",
+          "volume": 0.3,
+          "description": "Soft clicking sound for button interactions",
+          "duration": 0.1,
+          "tags": ["button", "click", "interaction"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Button clicked",
+            "vibrationPattern": [50]
+          }
+        },
+        {
+          "id": "ui_pop",
+          "name": "Pop Sound",
+          "file": "ui/pop.mp3",
+          "category": "ui",
+          "volume": 0.2,
+          "description": "Gentle pop sound for menu interactions",
+          "duration": 0.15,
+          "tags": ["menu", "pop", "interface"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Menu opened",
+            "vibrationPattern": [30]
+          }
+        }
+      ]
+    },
+    {
+      "name": "success",
+      "description": "Success and achievement sounds",
+      "sounds": [
+        {
+          "id": "success_chime",
+          "name": "Success Chime",
+          "file": "success/chime.mp3",
+          "category": "success",
+          "volume": 0.5,
+          "description": "Pleasant ascending chime for successful actions",
+          "duration": 0.3,
+          "tags": ["success", "achievement", "positive"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Success! Task completed",
+            "vibrationPattern": [30, 50, 30]
+          }
+        },
+        {
+          "id": "success_cheer",
+          "name": "Celebration Cheer",
+          "file": "success/cheer.mp3",
+          "category": "success",
+          "volume": 0.6,
+          "description": "Cheerful fanfare for major achievements",
+          "duration": 0.8,
+          "tags": ["celebration", "cheer", "victory"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Celebration time!",
+            "vibrationPattern": [50, 30, 50, 30, 50]
+          }
+        }
+      ]
+    },
+    {
+      "name": "error",
+      "description": "Error and warning sounds",
+      "sounds": [
+        {
+          "id": "error_beep",
+          "name": "Error Beep",
+          "file": "error/beep.mp3",
+          "category": "error",
+          "volume": 0.3,
+          "description": "Descending beep indicating an error",
+          "duration": 0.2,
+          "tags": ["error", "warning", "negative"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Oops! Something went wrong",
+            "vibrationPattern": [100, 50, 100]
+          }
+        }
+      ]
+    },
+    {
+      "name": "notification",
+      "description": "Notification and alert sounds",
+      "sounds": [
+        {
+          "id": "notification_ping",
+          "name": "Notification Ping",
+          "file": "notification/ping.mp3",
+          "category": "notification",
+          "volume": 0.4,
+          "description": "Short ping sound for notifications",
+          "duration": 0.1,
+          "tags": ["notification", "alert", "ping"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "New notification",
+            "vibrationPattern": [20, 30, 20]
+          }
+        }
+      ]
+    },
+    {
+      "name": "game",
+      "description": "Game and interactive sounds",
+      "sounds": [
+        {
+          "id": "game_achievement",
+          "name": "Achievement Sound",
+          "file": "game/achievement.mp3",
+          "category": "game",
+          "volume": 0.6,
+          "description": "Sound for unlocking achievements",
+          "duration": 0.5,
+          "tags": ["achievement", "unlock", "game"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Achievement unlocked!",
+            "vibrationPattern": [40, 60, 40]
+          }
+        }
+      ]
+    },
+    {
+      "name": "educational",
+      "description": "Educational and learning sounds",
+      "sounds": [
+        {
+          "id": "educational_alphabet",
+          "name": "Alphabet Sound",
+          "file": "educational/alphabet.mp3",
+          "category": "educational",
+          "volume": 0.4,
+          "description": "Educational alphabet learning sound",
+          "duration": 0.8,
+          "tags": ["alphabet", "learning", "educational"],
+          "accessibility": {
+            "visualFeedback": true,
+            "closedCaption": "Letter sound",
+            "vibrationPattern": [25, 25, 25]
+          }
+        }
+      ]
+    },
+    {
+      "name": "music",
+      "description": "Background music tracks",
+      "sounds": [
+        {
+          "id": "music_background",
+          "name": "Background Music",
+          "file": "music/background.mp3",
+          "category": "music",
+          "volume": 0.3,
+          "description": "Gentle background music",
+          "duration": 30,
+          "loop": true,
+          "tags": ["background", "music", "ambient"],
+          "accessibility": {
+            "visualFeedback": false,
+            "closedCaption": "Background music playing",
+            "vibrationPattern": []
+          }
+        }
+      ]
+    }
+  ],
+  "globalSettings": {
+    "masterVolume": 0.8,
+    "defaultVolume": 0.5,
+    "maxVolume": 1.0,
+    "fadeDuration": 0.3,
+    "crossfadeDuration": 0.5,
+    "cacheSize": 50,
+    "preloadStrategy": "adaptive",
+    "compression": {
+      "enabled": true,
+      "quality": 0.8,
+      "bitrate": 128
+    }
+  },
+  "accessibility": {
+    "enabled": true,
+    "visualFeedback": true,
+    "closedCaptions": true,
+    "vibrationFeedback": true,
+    "reducedMotion": false,
+    "highContrast": false,
+    "screenReader": true
+  },
+  "parentalControls": {
+    "maxVolume": 0.8,
+    "allowedCategories": ["ui", "game", "educational", "music"],
+    "contentFilter": "moderate",
+    "timeLimits": {
+      "startTime": "08:00",
+      "endTime": "20:00"
+    },
+    "dailyLimit": 120
+  }
+}

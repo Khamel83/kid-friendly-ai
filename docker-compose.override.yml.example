@@ -1,0 +1,53 @@
+# Docker Compose override file for local development
+# Copy this file to docker-compose.override.yml and modify as needed
+
+version: '3.8'
+
+services:
+  app:
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+      - MOCK_API=true
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    command: npm run dev
+
+  nginx:
+    volumes:
+      - ./nginx-dev.conf:/etc/nginx/nginx.conf:ro
+
+  redis:
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+
+  # Development-only services
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: kid-friendly-ai-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app-network
+
+  # Database for development
+  postgres:
+    image: postgres:15-alpine
+    container_name: kid-friendly-ai-postgres
+    environment:
+      - POSTGRES_DB=kid_friendly_ai
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+    driver: local

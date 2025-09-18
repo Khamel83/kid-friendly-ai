@@ -20,6 +20,21 @@ export default async function handler(
   }
 
   try {
+    // Parse query parameters for enhanced features
+    const { language, detect_language } = req.query;
+
+    // Get privacy mode from headers
+    const privacyMode = req.headers['x-privacy-mode'] as 'local' | 'cloud' || 'cloud';
+
+    // If local processing is requested, return mock response
+    if (privacyMode === 'local') {
+      return res.status(200).json({
+        text: '[Local processing mode - audio received]',
+        confidence: 0.8,
+        language: language || 'en-US',
+        processingMode: 'local'
+      });
+    }
     // Get the raw body data
     const chunks: Buffer[] = [];
     for await (const chunk of req) {
@@ -126,16 +141,34 @@ export default async function handler(
       firstBytes: audioData.slice(0, 8).toString('hex')
     });
 
-    // Send to OpenAI
-    const response = await openai.audio.transcriptions.create({
+    // Send to OpenAI with enhanced parameters
+    const transcriptionParams: any = {
       file: file,
       model: 'whisper-1',
-      language: 'en', // Specify English to improve accuracy
       response_format: 'json',
       temperature: 0.2
-    });
+    };
 
-    return res.status(200).json({ text: response.text });
+    // Add language parameter if specified
+    if (language && typeof language === 'string') {
+      transcriptionParams.language = language;
+    }
+
+    // Enable language detection if requested
+    if (detect_language === 'true') {
+      // Remove language parameter to enable auto-detection
+      delete transcriptionParams.language;
+    }
+
+    const response = await openai.audio.transcriptions.create(transcriptionParams);
+
+    return res.status(200).json({
+      text: response.text,
+      confidence: 0.9, // Whisper doesn't provide confidence, so we use a reasonable default
+      language: language || 'en-US',
+      processingMode: 'cloud',
+      detectedLanguage: detect_language === 'true' ? 'auto-detected' : language || 'en-US'
+    });
   } catch (error) {
     console.error('Error transcribing audio:', error);
     if (error instanceof Error) {

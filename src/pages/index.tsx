@@ -1,12 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
-import VoiceButton from '../components/VoiceButton';
+import SpeechControls from '../components/SpeechControls';
 import CharacterCompanion from '../components/CharacterCompanion';
 import MiniGame from '../components/MiniGame';
-import { SoundManager } from '../utils/soundEffects';
+import PatternPuzzleGame from '../components/PatternPuzzleGame';
+import AnimalGame from '../components/AnimalGame';
+import SoundControls from '../components/SoundControls';
+import OfflineIndicator from '../components/OfflineIndicator';
+import { EnhancedSoundManager } from '../utils/soundManager';
+import { useSoundControls, useSoundAccessibility } from '../hooks/useSoundEffects';
+import { useOfflineManager, useOfflineState, useSyncOperations, useOfflineQueue } from '../hooks/useOfflineManager';
+import { SoundAccessibilityManager } from '../utils/soundAccessibility';
 import { register } from '../utils/registerServiceWorker';
 import { AccessibilityUtils } from '../utils/accessibility';
 import { Buffer } from 'buffer'; // Needed for sentence detection buffer
+import '../styles/enhancedSpeechControls.css';
+import '../styles/offlineIndicator.css';
 
 interface Message {
   type: 'user' | 'ai';
@@ -20,6 +29,18 @@ const SENTENCE_END_REGEX = /([.?!])\s+/;
 const SESSION_STORAGE_KEY = 'kidFriendlyAiHistory';
 
 export default function Home() {
+  // Offline functionality
+  const offlineManager = useOfflineManager({
+    autoInitialize: true,
+    enableStateUpdates: true,
+    enableEventListeners: true,
+    syncOnOnline: true
+  });
+
+  const { isOnline, isOffline, connectionQuality } = useOfflineState();
+  const { syncNow, isSyncing } = useSyncOperations();
+  const { addOperation } = useOfflineQueue();
+
   // Core States
   const [isListening, setIsListening] = useState(false); // Mic is recording
   const [isProcessing, setIsProcessing] = useState(false); // Waiting for AI text stream start/end OR TTS audio
@@ -33,10 +54,36 @@ export default function Home() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [particles, setParticles] = useState<Array<{id: number, x: number, y: number, color: string}>>([]);
   const [showGame, setShowGame] = useState(false);
+  const [showPatternPuzzleGame, setShowPatternPuzzleGame] = useState(false);
+  const [showAnimalGame, setShowAnimalGame] = useState(false);
+
+  // Enhanced speech states
+  const [speechSettingsOpen, setSpeechSettingsOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+  const [privacyMode, setPrivacyMode] = useState<'local' | 'cloud'>('cloud');
 
   // Action Bar States
   const [isMuted, setIsMuted] = useState(false);
   const [lastAiResponse, setLastAiResponse] = useState('');
+
+  // Sound Controls States
+  const [showSoundControls, setShowSoundControls] = useState(false);
+
+  // Hook into sound controls and accessibility
+  const {
+    setMasterVolume,
+    toggleMute: toggleHookMute,
+    masterVolume,
+    isMuted: hookIsMuted,
+    setCategoryVolume
+  } = useSoundControls();
+
+  const {
+    visualFeedback,
+    vibrationEnabled,
+    setVisualFeedback,
+    setVibrationEnabled
+  } = useSoundAccessibility();
 
   // Streaming & Queuing States
   const ttsRequestQueueRef = useRef<string[]>([]); // Queue of sentences needing TTS
@@ -155,27 +202,44 @@ export default function Home() {
   const addMessageToHistory = useCallback((type: 'user' | 'ai', text: string, isComplete: boolean = true) => {
     setConversationHistory(prev => {
       const lastIndex = prev.length - 1;
-      // --- Refined Logic --- 
+      let newHistory;
+
+      // --- Refined Logic ---
       if (type === 'ai' && lastIndex >= 0 && prev[lastIndex].type === 'ai' && !prev[lastIndex].isComplete) {
         // If last message is AI and not marked complete, UPDATE it.
         const updatedHistory = [...prev];
         updatedHistory[lastIndex] = { ...updatedHistory[lastIndex], text: text, isComplete: isComplete };
-        return updatedHistory;
+        newHistory = updatedHistory;
       } else if (type === 'ai' && text === '' && !isComplete) {
         // If adding an empty AI placeholder, just add it.
-        return [...prev, { type, text, isComplete: false }];
+        newHistory = [...prev, { type, text, isComplete: false }];
       } else if (type === 'ai' && lastIndex >= 0 && prev[lastIndex].type === 'ai' && prev[lastIndex].text === '' && !prev[lastIndex].isComplete) {
         // If last message is an EMPTY AI placeholder, REPLACE it with the first real text.
-        const updatedHistory = [...prev.slice(0, lastIndex)]; // Remove placeholder
-        updatedHistory.push({ type, text, isComplete: isComplete }); // Add new message
-        return updatedHistory;
+        newHistory = [...prev.slice(0, lastIndex)]; // Remove placeholder
+        newHistory.push({ type, text, isComplete: isComplete }); // Add new message
       } else {
         // Otherwise (user message, or first AI message after user), add a new entry.
-        return [...prev, { type, text, isComplete: type === 'user' ? true : isComplete }];
+        newHistory = [...prev, { type, text, isComplete: type === 'user' ? true : isComplete }];
       }
-      // --- End Refined Logic --- 
+      // --- End Refined Logic ---
+
+      // Save conversation history to offline storage when online, queue for sync when offline
+      if (isOnline && isComplete) {
+        offlineManager.cacheSet(`conversation_${Date.now()}`, {
+          messages: newHistory,
+          timestamp: Date.now(),
+          type: 'conversation_save'
+        }).catch(console.error);
+      } else if (isOffline && isComplete) {
+        addOperation('CONVERSATION_SAVE', {
+          messages: newHistory,
+          timestamp: Date.now()
+        }).catch(console.error);
+      }
+
+      return newHistory;
     });
-  }, []);
+  }, [isOnline, offlineManager, addOperation]);
 
   // --- Function to add sentence to TTS Queue (Updated with stop check) ---
   const enqueueTtsRequest = useCallback((sentence: string) => {
@@ -412,6 +476,12 @@ export default function Home() {
       return;
     }
 
+    // Check if offline and provide appropriate response
+    if (isOffline) {
+      setErrorMessage('You are currently offline. The AI assistant requires an internet connection to work. Please check your connection and try again.');
+      return;
+    }
+
     let retryCount = 0;
     const maxRetries = 2;
     
@@ -639,10 +709,17 @@ export default function Home() {
   }, [conversationHistory, isProcessing, isSpeaking]);
 
   // Initialize sound manager
-  const soundManager = useRef<SoundManager | null>(null);
+  const soundManager = useRef<EnhancedSoundManager | null>(null);
+  const accessibilityManager = useRef<SoundAccessibilityManager | null>(null);
 
   useEffect(() => {
-    soundManager.current = SoundManager.getInstance();
+    try {
+      soundManager.current = EnhancedSoundManager.getInstance();
+      accessibilityManager.current = SoundAccessibilityManager.getInstance();
+      console.log('Enhanced sound system initialized');
+    } catch (error) {
+      console.error('Failed to initialize enhanced sound system:', error);
+    }
   }, []);
 
   // Set up keyboard navigation for action bar
@@ -741,14 +818,29 @@ export default function Home() {
     setIsMuted(prev => {
       const newMutedState = !prev;
 
+      // Use enhanced sound system
+      toggleHookMute();
+
       // Stop audio if muting
       if (newMutedState && (isSpeaking || isProcessing)) {
         handleStopSpeaking();
       }
 
+      // Trigger visual feedback if enabled
+      if (visualFeedback) {
+        const feedbackMessage = newMutedState ? 'Sound muted' : 'Sound unmuted';
+        // Show visual feedback (this would use the accessibility manager)
+        console.log(feedbackMessage);
+      }
+
+      // Trigger vibration if enabled
+      if (vibrationEnabled && 'vibrate' in navigator) {
+        navigator.vibrate(newMutedState ? [100] : [50]);
+      }
+
       return newMutedState;
     });
-  }, [isSpeaking, isProcessing, handleStopSpeaking]);
+  }, [isSpeaking, isProcessing, handleStopSpeaking, toggleHookMute, visualFeedback, vibrationEnabled]);
 
   // Read last AI response aloud
   const readLastResponse = useCallback(() => {
@@ -778,6 +870,28 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
+      {/* Offline Status Indicator */}
+      <OfflineIndicator
+        position="top-right"
+        showSyncButton={true}
+        showStats={true}
+        compact={false}
+        onSync={syncNow}
+      />
+
+      {/* Offline Mode Warning */}
+      {isOffline && (
+        <div className="fixed top-20 left-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded z-40">
+          <div className="flex items-center">
+            <span className="text-xl mr-2">📵</span>
+            <div>
+              <p className="font-bold">Offline Mode</p>
+              <p className="text-sm">You're currently offline. The app will continue to work and sync when you're back online.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Sidebar for Controls */}
       <aside className="sidebar">
         <h1 className="title">AI Buddy</h1>
@@ -793,14 +907,60 @@ export default function Home() {
         </div>
 
         <div className="controls-area">
-          {/* --- Render Simplified Voice Button --- */}
-          <VoiceButton 
-            onResult={handleQuestionSubmit} 
-            isListening={isListening}
-            setIsListening={setIsListening}
-            disabled={isProcessing || isSpeaking}
+          {/* Enhanced Speech Controls */}
+          <SpeechControls
+            onResult={handleQuestionSubmit}
+            onError={setErrorMessage}
+            onVoiceActivity={(active) => {
+              if (active) {
+                setCharacterState('listening');
+                soundManager.current?.playStart();
+              }
+            }}
+            initialLanguage={selectedLanguage}
+            showSettings={true}
+            childFriendly={true}
+            animateButtons={true}
+            compact={false}
+            theme="auto"
+            className="enhanced-speech-controls"
           />
-          {/* --- End Render Simplified Voice Button --- */}
+          {/* Enhanced Speech Settings */}
+          {speechSettingsOpen && (
+            <div className="speech-settings-panel">
+              <h3>Speech Settings</h3>
+              <div className="setting-item">
+                <label>Language</label>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                >
+                  <option value="en-US">English</option>
+                  <option value="es-ES">Español</option>
+                  <option value="fr-FR">Français</option>
+                  <option value="de-DE">Deutsch</option>
+                  <option value="zh-CN">中文</option>
+                </select>
+              </div>
+              <div className="setting-item">
+                <label>Privacy Mode</label>
+                <div className="toggle-group">
+                  <button
+                    className={`toggle-btn ${privacyMode === 'local' ? 'active' : ''}`}
+                    onClick={() => setPrivacyMode('local')}
+                  >
+                    Local 🔒
+                  </button>
+                  <button
+                    className={`toggle-btn ${privacyMode === 'cloud' ? 'active' : ''}`}
+                    onClick={() => setPrivacyMode('cloud')}
+                  >
+                    Cloud ☁️
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* --- Render Separate Stop Speaking Button --- */}
           <button
@@ -813,6 +973,16 @@ export default function Home() {
           </button>
           {/* --- End Render Separate Stop Speaking Button --- */}
 
+          {/* Sound Controls Button */}
+          <button
+              className="control-button sound-button"
+              onClick={() => setShowSoundControls(!showSoundControls)}
+              disabled={isProcessing || isSpeaking}
+              aria-label="Toggle Sound Controls"
+          >
+              {showSoundControls ? 'Hide Sound 🔇' : 'Sound Controls 🔊'}
+          </button>
+
           {/* Mini Game Button */}
           <button
               className="control-button game-button"
@@ -821,6 +991,26 @@ export default function Home() {
               aria-label="Toggle Game"
           >
               {showGame ? 'Back to Chat 💬' : 'Play Game 🎮'}
+          </button>
+
+          {/* Pattern Puzzle Game Button */}
+          <button
+              className="control-button pattern-button"
+              onClick={() => setShowPatternPuzzleGame(!showPatternPuzzleGame)}
+              disabled={isProcessing || isSpeaking}
+              aria-label="Toggle Pattern Puzzle Game"
+          >
+              {showPatternPuzzleGame ? 'Back to Chat 💬' : 'Pattern Puzzles 🧩'}
+          </button>
+
+          {/* Animal Game Button */}
+          <button
+              className="control-button animal-button"
+              onClick={() => setShowAnimalGame(!showAnimalGame)}
+              disabled={isProcessing || isSpeaking}
+              aria-label="Toggle Animal Game"
+          >
+              {showAnimalGame ? 'Back to Chat 💬' : 'Animal Adventure 🦁'}
           </button>
           {/* --- End Mini Game Button --- */}
 
@@ -834,9 +1024,42 @@ export default function Home() {
 
       {/* Right Main Area for Chat */}
       <main className="main-content">
-        {showGame ? (
+        {showSoundControls ? (
+          <div className="sound-controls-container">
+            <SoundControls
+              compact={false}
+              showLibrary={true}
+              showAccessibility={true}
+              showParentalControls={true}
+              onVolumeChange={setMasterVolume}
+              onMuteToggle={toggleMute}
+            />
+          </div>
+        ) : showGame ? (
           <div className="game-container">
             <MiniGame onComplete={() => setShowGame(false)} />
+          </div>
+        ) : showPatternPuzzleGame ? (
+          <div className="game-container">
+            <PatternPuzzleGame
+              isOpen={showPatternPuzzleGame}
+              onClose={() => setShowPatternPuzzleGame(false)}
+              onStickerEarned={(stickerId) => {
+                // Handle sticker earned from pattern puzzle game
+                console.log('Sticker earned:', stickerId);
+              }}
+            />
+          </div>
+        ) : showAnimalGame ? (
+          <div className="game-container">
+            <AnimalGame
+              isOpen={showAnimalGame}
+              onClose={() => setShowAnimalGame(false)}
+              onStickerEarned={(stickerId) => {
+                // Handle sticker earned from animal game
+                console.log('Animal sticker earned:', stickerId);
+              }}
+            />
           </div>
         ) : (
           <div className="chat-history-container">
@@ -866,17 +1089,9 @@ export default function Home() {
         <button
           className="action-button"
           onClick={() => {
-            if (isListening) {
-              // This will be handled by VoiceButton component
-              const voiceButton = document.querySelector('.voice-button') as HTMLButtonElement;
-              if (voiceButton) voiceButton.click();
-            } else {
-              // Trigger voice recording through the existing mechanism
-              if (!isProcessing && !isSpeaking && !isMuted) {
-                const voiceButton = document.querySelector('.voice-button') as HTMLButtonElement;
-                if (voiceButton) voiceButton.click();
-              }
-            }
+            // Trigger speech controls
+            const speechButton = document.querySelector('.speech-button') as HTMLButtonElement;
+            if (speechButton) speechButton.click();
           }}
           disabled={isProcessing || isSpeaking || isMuted}
           aria-label={isListening ? "Stop recording" : "Start talking"}
@@ -907,11 +1122,17 @@ export default function Home() {
         <button
           className="action-button"
           onClick={() => {
-            if (showGame) {
+            if (showSoundControls) {
+              setShowSoundControls(false);
+            } else if (showGame) {
               setShowGame(false);
+            } else if (showPatternPuzzleGame) {
+              setShowPatternPuzzleGame(false);
+            } else if (showAnimalGame) {
+              setShowAnimalGame(false);
             }
           }}
-          disabled={!showGame}
+          disabled={!showSoundControls && !showGame && !showPatternPuzzleGame && !showAnimalGame}
           aria-label="Back to chat"
           title="Back to chat"
         >

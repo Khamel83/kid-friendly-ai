@@ -237,6 +237,64 @@ a {
   box-shadow: none;
 }
 
+.control-button.sound-button {
+  background: linear-gradient(135deg, var(--secondary-color), var(--success-color));
+  color: var(--text-color);
+  border: none;
+  border-radius: 30px;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  width: 85%;
+  margin-top: 1rem;
+  box-shadow: 0 6px 20px rgba(78, 205, 196, 0.3);
+}
+
+.control-button.sound-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--success-color), var(--secondary-color));
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 10px 30px rgba(78, 205, 196, 0.4);
+}
+
+.sound-controls-container {
+  padding: 2rem;
+  height: 100%;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  margin: 1rem;
+}
+
+/* Sound feedback animations */
+@keyframes soundPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
+}
+
+@keyframes soundFeedback {
+  0% { transform: translateY(20px); opacity: 0; }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  100% { transform: translateY(-20px); opacity: 0; }
+}
+
+.sound-feedback {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 10px;
+  font-size: 14px;
+  z-index: 1000;
+  animation: soundFeedback 2s ease-in-out;
+  pointer-events: none;
+}
+
 .error-container.sidebar-error {
   background-color: transparent;
   padding: 0;

@@ -1,0 +1,255 @@
+version: '3.8'
+
+services:
+  # Production Next.js application
+  app:
+    build:
+      context: ../
+      dockerfile: Dockerfile
+      target: runner
+    container_name: kid-friendly-ai-app-prod
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # AI API Keys (from production secrets)
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      # Production URLs
+      - NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://kid-friendly-ai.com}
+      - NEXT_PUBLIC_VERCEL_URL=${NEXT_PUBLIC_VERCEL_URL:-https://kid-friendly-ai.com}
+      # Feature flags
+      - NEXT_PUBLIC_ENABLE_VOICE_INPUT=${NEXT_PUBLIC_ENABLE_VOICE_INPUT:-true}
+      - NEXT_PUBLIC_ENABLE_PARENTAL_CONTROLS=${NEXT_PUBLIC_ENABLE_PARENTAL_CONTROLS:-true}
+      - NEXT_PUBLIC_ENABLE_SOUND_EFFECTS=${NEXT_PUBLIC_ENABLE_SOUND_EFFECTS:-true}
+      - NEXT_PUBLIC_ENABLE_PATTERN_PUZZLE=${NEXT_PUBLIC_ENABLE_PATTERN_PUZZLE:-true}
+      - NEXT_PUBLIC_ENABLE_ANIMAL_QUIZ=${NEXT_PUBLIC_ENABLE_ANIMAL_QUIZ:-true}
+      - NEXT_PUBLIC_ENABLE_ACCESSIBILITY=${NEXT_PUBLIC_ENABLE_ACCESSIBILITY:-true}
+      # AI configuration
+      - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-google/gemini-2.5-flash-lite}
+      - MAX_TOKENS=${MAX_TOKENS:-500}
+      - AI_TEMPERATURE=${AI_TEMPERATURE:-0.8}
+      - STREAMING_TIMEOUT=${STREAMING_TIMEOUT:-15000}
+      # Security settings
+      - RATE_LIMIT_RPM=${RATE_LIMIT_RPM:-60}
+      - RATE_LIMIT_RPH=${RATE_LIMIT_RPH:-1000}
+      # Audio configuration
+      - DEFAULT_TTS_VOICE=${DEFAULT_TTS_VOICE:-shimmer}
+      - TTS_MODEL=${TTS_MODEL:-tts-1}
+      - TTS_AUDIO_FORMAT=${TTS_AUDIO_FORMAT:-mp3}
+      - WHISPER_MODEL=${WHISPER_MODEL:-whisper-1}
+      - TRANSCRIPTION_LANGUAGE=${TRANSCRIPTION_LANGUAGE:-en}
+      # Redis configuration
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # Database configuration (if needed)
+      - DATABASE_ENABLED=false
+    volumes:
+      - ../public:/app/public:ro
+      - ../logs:/app/logs
+      - ../tmp:/app/tmp
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "node", "healthcheck.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+
+  # Production Nginx with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: kid-friendly-ai-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../ssl:/etc/nginx/ssl:ro
+      - ../logs/nginx:/var/log/nginx
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    networks:
+      - app-network
+    depends_on:
+      - app
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # Redis for production
+  redis:
+    image: redis:7-alpine
+    container_name: kid-friendly-ai-redis-prod
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+      - ../redis.conf:/etc/redis/redis.conf:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # Certbot for SSL certificate management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: kid-friendly-ai-certbot
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - app-network
+
+  # Production monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kid-friendly-ai-prometheus-prod
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - app-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # Production Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kid-friendly-ai-grafana-prod
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_NAME=Main Org.
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # Application logs aggregation
+  fluentd:
+    image: fluent/fluentd:v1.16-1
+    container_name: kid-friendly-ai-fluentd
+    restart: unless-stopped
+    volumes:
+      - ../logs:/fluentd/log
+      - ../fluentd/conf:/fluentd/etc
+    networks:
+      - app-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  certbot-www:
+    driver: local
+  certbot-conf:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: br-app
+
+# Security constraints
+secrets:
+  redis_password:
+    external: true
+  grafana_password:
+    external: true
+  openrouter_api_key:
+    external: true
+  openai_api_key:
+    external: true

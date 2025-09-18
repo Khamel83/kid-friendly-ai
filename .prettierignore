@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.next/
+out/
+
+# Build outputs
+dist/
+build/
+
+# Environment files
+.env*
+
+# Cache
+.cache/
+.temp/
+*.log
+
+# Coverage reports
+coverage/
+*.lcov
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Reports
+reports/

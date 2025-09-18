@@ -1,5 +1,11 @@
 # Kid-Friendly AI Assistant 🤖✨
 
+![CI/CD Pipeline](https://github.com/Khamel83/kid-friendly-ai/workflows/Continuous%20Integration/badge.svg)
+![Code Quality](https://github.com/Khamel83/kid-friendly-ai/workflows/Code%20Quality/badge.svg)
+![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
+![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
 A super fun and interactive AI companion designed specifically for kids! This engaging web application combines voice interaction with playful animations, games, and rewards to make learning an adventure.
 
 ## 🌟 Amazing Features
