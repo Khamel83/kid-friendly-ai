@@ -133,24 +133,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             buffer = lines.pop() || ''; // Keep incomplete line in buffer
             
             for (const line of lines) {
+                if (line.trim() === '') continue; // Skip empty lines
+
                 if (line.startsWith('data:')) {
                     const dataString = line.substring(5).trim();
                     if (dataString === '[DONE]') {
                         console.log('OpenRouter stream signaled [DONE]');
                         // We will send our own 'done' event after the loop
-                        continue; 
+                        continue;
                     }
+
+                    // Skip empty or obviously invalid data
+                    if (!dataString || dataString.length < 2) continue;
+
+                    // Validate that the data looks like JSON before parsing
+                    if (!dataString.trim().startsWith('{') || !dataString.trim().endsWith('}')) {
+                        console.warn('Skipping malformed OpenRouter data (not JSON object):', dataString);
+                        continue;
+                    }
+
                     try {
                         const chunk = JSON.parse(dataString);
-                        const content = chunk.choices[0]?.delta?.content || '';
+                        const content = chunk.choices?.[0]?.delta?.content || '';
                         if (content) {
                             sendSse(res, messageId++, { type: 'chunk', content });
                         }
-                        if (chunk.choices[0]?.finish_reason) {
+                        if (chunk.choices?.[0]?.finish_reason) {
                            console.log('OpenRouter stream finish reason:', chunk.choices[0]?.finish_reason);
                         }
                     } catch (parseError) {
                         console.warn('Could not parse OpenRouter stream data chunk:', dataString, parseError);
+                        // Don't send the error to client, just continue
                     }
                 }
             }
