@@ -414,7 +414,7 @@ export default function Home() {
     console.log("Stop completed.");
   }, []);
 
-  // Handle streaming responses properly
+  // Simplified handleQuestionSubmit without complex audio queuing
   const handleQuestionSubmit = async (text: string) => {
     if (!text || text.trim() === '') return;
 
@@ -429,8 +429,6 @@ export default function Home() {
     setIsProcessing(true);
     setIsSpeaking(false);
     setErrorMessage('');
-    // Reset error count on new conversation
-    sessionStorage.removeItem('sseErrorCount');
     addMessageToHistory('ai', '', false); // Placeholder
 
     try {
@@ -447,102 +445,52 @@ export default function Home() {
         throw new Error(`Error: ${response.status}`);
       }
 
-      if (!response.body) {
-        throw new Error('Response body is null');
-      }
+      const data = await response.json();
+      const aiResponse = data.response || data.answer || 'No response received';
 
-      // Check if streaming is supported
-      if (!response.body.getReader) {
-        // Fallback to non-streaming response for older browsers
-        const data = await response.json();
-        const aiResponse = data.response || data.answer || 'No response received';
-        addMessageToHistory('ai', aiResponse, true);
-
-        // Simple TTS - just play the full response
-        if (!isMuted && aiResponse.trim()) {
-          enqueueTtsRequest(aiResponse);
-        }
-
-        soundManager.current?.playSuccess();
-        return;
-      }
-
-      // Handle streaming response
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-      let sentenceBuffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-
-          if (trimmedLine.startsWith('data:')) {
-            try {
-              const dataString = trimmedLine.substring(5).trim();
-              if (dataString === '[DONE]') continue;
-
-              // Skip empty or obviously invalid data
-              if (!dataString || dataString.length < 2) continue;
-
-              // Validate that the data looks like JSON before parsing
-              if (!dataString.trim().startsWith('{') || !dataString.trim().endsWith('}')) {
-                console.warn('Skipping malformed SSE data (not JSON object):', dataString);
-                continue;
-              }
-
-              const data = JSON.parse(dataString);
-              if (data.type === 'chunk' && data.content) {
-                aiResponse += data.content;
-                sentenceBuffer += data.content;
-
-                // Check for sentence completion
-                if (SENTENCE_END_REGEX.test(sentenceBuffer)) {
-                  const sentences = sentenceBuffer.split(SENTENCE_END_REGEX);
-                  for (let i = 0; i < sentences.length - 1; i++) {
-                    if (sentences[i].trim()) {
-                      enqueueTtsRequest(sentences[i].trim() + '.');
-                    }
-                  }
-                  sentenceBuffer = sentences[sentences.length - 1];
-                }
-
-                // Update conversation history with streaming content
-                addMessageToHistory('ai', aiResponse, false);
-              } else if (data.type === 'done') {
-                // Process any remaining content in sentence buffer
-                if (sentenceBuffer.trim()) {
-                  enqueueTtsRequest(sentenceBuffer.trim());
-                }
-                // Mark the message as complete
-                addMessageToHistory('ai', aiResponse, true);
-              }
-            } catch (parseError) {
-              console.warn('Could not parse SSE data:', line, parseError);
-              // Continue processing other lines instead of failing completely
-
-              // If we're seeing persistent parsing errors, show a user-friendly message
-              const errorCount = parseInt(sessionStorage.getItem('sseErrorCount') || '0');
-              if (errorCount > 5) {
-                setErrorMessage('Having trouble connecting to the AI. Please try again in a moment.');
-                sessionStorage.removeItem('sseErrorCount');
-              } else {
-                sessionStorage.setItem('sseErrorCount', (errorCount + 1).toString());
-              }
-            }
-          }
-        }
-      }
+      // Update conversation history
+      addMessageToHistory('ai', aiResponse, true);
 
       // Play success sound
       soundManager.current?.playSuccess();
+
+      // Simple TTS - just play the full response
+      if (!isMuted && aiResponse.trim()) {
+        try {
+          const ttsResponse = await fetch('/api/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: aiResponse })
+          });
+
+          if (ttsResponse.ok) {
+            const audioData = await ttsResponse.arrayBuffer();
+
+            if (audioContextRef.current) {
+              if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume();
+              }
+
+              const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+              const source = audioContextRef.current.createBufferSource();
+              source.buffer = audioBuffer;
+              source.connect(audioContextRef.current.destination);
+
+              source.onended = () => {
+                setIsSpeaking(false);
+                currentAudioSourceRef.current = null;
+              };
+
+              source.start();
+              setIsSpeaking(true);
+              currentAudioSourceRef.current = source;
+            }
+          }
+        } catch (ttsError) {
+          console.warn('TTS failed:', ttsError);
+          // Continue even if TTS fails
+        }
+      }
 
     } catch (error) {
       console.error('Error getting AI response:', error);
@@ -745,10 +693,8 @@ export default function Home() {
     }
   }, [conversationHistory.length, triggerCelebration]);
 
-  const isAnyGameActive = showMiniGame || showMathGame || showPatternPuzzleGame || showAnimalGame;
-
   return (
-    <div className={`container full-page-layout ${isAnyGameActive ? 'game-active' : ''}`}>
+    <div className="container full-page-layout">
       <Head>
         <title>Kid-Friendly AI Buddy</title>
         <meta name="description" content="A simple, kid-friendly AI assistant" />
