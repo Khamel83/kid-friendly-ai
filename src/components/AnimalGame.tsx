@@ -151,35 +151,61 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
   }, [config.maxHints]);
 
   const generateNewQuestion = useCallback(() => {
-    const difficulty = gameState.level <= 3 ? 'easy' :
-                      gameState.level <= 6 ? 'medium' :
-                      gameState.level <= 9 ? 'hard' : 'expert';
+    try {
+      const difficulty = gameState.level <= 3 ? 'easy' :
+                        gameState.level <= 6 ? 'medium' :
+                        gameState.level <= 9 ? 'hard' : 'expert';
 
-    const questionTypes: AnimalQuestion['type'][] = ['identification', 'habitat', 'diet', 'behavior', 'adaptation', 'conservation', 'fun-fact'];
-    const randomType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
+      const questionTypes: AnimalQuestion['type'][] = ['identification', 'habitat', 'diet', 'behavior', 'adaptation', 'conservation', 'fun-fact'];
+      const randomType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
 
-    const availableAnimals = animalDatabase.getAllAnimals();
-    const randomAnimal = availableAnimals[Math.floor(Math.random() * availableAnimals.length)];
+      const availableAnimals = animalDatabase.getAllAnimals();
+      const randomAnimal = availableAnimals[Math.floor(Math.random() * availableAnimals.length)];
 
-    const question = questionGenerator.generateQuestion(randomAnimal, randomType, difficulty);
+      console.log('Generating question for:', randomAnimal.name, randomType, difficulty);
 
-    setGameState(prev => ({
-      ...prev,
-      currentQuestion: question,
-      timeRemaining: config.timePerQuestion,
-      hints: Math.min(prev.hints + 1, config.maxHints)
-    }));
+      // Simple fallback question generation if the complex one fails
+      let question;
+      try {
+        question = questionGenerator.generateQuestion(randomAnimal, randomType, difficulty);
+      } catch (error) {
+        console.warn('Question generator failed, using fallback:', error);
+        // Create a simple identification question as fallback
+        question = {
+          id: `fallback-${randomAnimal.id}-${Date.now()}`,
+          type: 'identification',
+          difficulty: 'easy',
+          question: `What animal is this?`,
+          options: [randomAnimal.name, 'Lion', 'Elephant', 'Tiger'].sort(() => Math.random() - 0.5),
+          correctAnswer: randomAnimal.name,
+          explanation: `This is a ${randomAnimal.name}!`,
+          animal: randomAnimal
+        };
+      }
 
-    setSelectedAnswer(null);
-    setShowHint(false);
-    setShowExplanation(false);
-
-    // Add to discovered animals if new
-    if (!gameState.animalsDiscovered.includes(randomAnimal.id)) {
       setGameState(prev => ({
         ...prev,
-        animalsDiscovered: [...prev.animalsDiscovered, randomAnimal.id]
+        currentQuestion: question,
+        timeRemaining: config.timePerQuestion,
+        hints: Math.min(prev.hints + 1, config.maxHints)
       }));
+
+      setSelectedAnswer(null);
+      setShowHint(false);
+      setShowExplanation(false);
+
+      // Add to discovered animals if new
+      if (!gameState.animalsDiscovered.includes(randomAnimal.id)) {
+        setGameState(prev => ({
+          ...prev,
+          animalsDiscovered: [...prev.animalsDiscovered, randomAnimal.id]
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to generate question:', error);
+      // Show error message to user
+      setErrorMessage('Could not generate question. Please try again.');
+      setGameState(prev => ({ ...prev, gameState: 'menu' }));
     }
   }, [gameState.level, gameState.animalsDiscovered, animalDatabase, questionGenerator, config]);
 
@@ -557,12 +583,20 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
           <div className="game-learning">
             <div className="learning-header">
               <h3>Learning about {currentAnimal.name}</h3>
-              <button
-                className="new-animal-button"
-                onClick={() => setGameState(prev => ({ ...prev, gameState: 'animal-selection' }))}
-              >
-                ← Choose Different Animal
-              </button>
+              <div className="learning-actions">
+                <button
+                  className="new-animal-button"
+                  onClick={() => exploreAnimal(animalDatabase.getRandomAnimals(1)[0])}
+                >
+                  🎲 Another Random Animal
+                </button>
+                <button
+                  className="choose-animal-button"
+                  onClick={() => setGameState(prev => ({ ...prev, gameState: 'animal-selection' }))}
+                >
+                  📁 Choose Different Animal
+                </button>
+              </div>
             </div>
             {renderAnimalCard(currentAnimal)}
           </div>

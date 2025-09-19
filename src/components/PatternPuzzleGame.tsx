@@ -55,15 +55,87 @@ const simplePuzzles: Puzzle[] = [
     options: ['8', '9', '10', '11'],
     correctAnswer: 1,
     type: 'numbers'
+  },
+  {
+    id: '6',
+    question: 'What comes next in this growing pattern?',
+    pattern: ['🌱', '🌿', '🌳'],
+    options: ['🌰', '🍂', '🍄', '🌻'],
+    correctAnswer: 2,
+    type: 'visual'
+  },
+  {
+    id: '7',
+    question: 'Complete the counting pattern:',
+    pattern: ['10', '20', '30', '40'],
+    options: ['45', '50', '55', '60'],
+    correctAnswer: 1,
+    type: 'numbers'
+  },
+  {
+    id: '8',
+    question: 'What color comes next?',
+    pattern: ['🔴', '🔵', '🔴', '🔵', '🔴'],
+    options: ['🔵', '🔴', '🟢', '🟡'],
+    correctAnswer: 0,
+    type: 'colors'
+  },
+  {
+    id: '9',
+    question: 'Complete the animal pattern:',
+    pattern: ['🐶', '🐱', '🐶', '🐱'],
+    options: ['🐭', '🐶', '🐱', '🐹'],
+    correctAnswer: 1,
+    type: 'animals'
+  },
+  {
+    id: '10',
+    question: 'What comes next in this sequence?',
+    pattern: ['⬆️', '➡️', '⬇️'],
+    options: ['⬅️', '⬆️', '↗️', '↙️'],
+    correctAnswer: 0,
+    type: 'directions'
+  },
+  {
+    id: '11',
+    question: 'Complete the pattern:',
+    pattern: ['△', '▢', '△', '▢', '△'],
+    options: ['▢', '△', '○', '◇'],
+    correctAnswer: 0,
+    type: 'shapes'
+  },
+  {
+    id: '12',
+    question: 'What number comes next?',
+    pattern: ['1', '2', '4', '8'],
+    options: ['12', '16', '20', '24'],
+    correctAnswer: 1,
+    type: 'numbers'
   }
 ];
 
 export default function PatternPuzzleGame({ isOpen, onClose, onStickerEarned }: PatternPuzzleGameProps) {
   const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
+  const [usedPuzzles, setUsedPuzzles] = useState<number[]>([]);
   const [score, setScore] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+
+  // Get a random puzzle that hasn't been used yet
+  const getRandomPuzzle = () => {
+    const availablePuzzles = simplePuzzles.map((_, index) => index)
+      .filter(index => !usedPuzzles.includes(index));
+
+    if (availablePuzzles.length === 0) {
+      // Reset if all puzzles have been used
+      setUsedPuzzles([]);
+      return Math.floor(Math.random() * simplePuzzles.length);
+    }
+
+    const randomIndex = Math.floor(Math.random() * availablePuzzles.length);
+    return availablePuzzles[randomIndex];
+  };
 
   const currentPuzzle = simplePuzzles[currentPuzzleIndex];
 
@@ -74,7 +146,9 @@ export default function PatternPuzzleGame({ isOpen, onClose, onStickerEarned }: 
   }, [isOpen]);
 
   const resetGame = () => {
-    setCurrentPuzzleIndex(0);
+    const initialIndex = getRandomPuzzle();
+    setCurrentPuzzleIndex(initialIndex);
+    setUsedPuzzles([initialIndex]);
     setScore(0);
     setSelectedAnswer(null);
     setShowFeedback(false);
@@ -93,17 +167,11 @@ export default function PatternPuzzleGame({ isOpen, onClose, onStickerEarned }: 
   };
 
   const nextPuzzle = () => {
-    if (currentPuzzleIndex < simplePuzzles.length - 1) {
-      setCurrentPuzzleIndex(prev => prev + 1);
-      setSelectedAnswer(null);
-      setShowFeedback(false);
-    } else {
-      // Game completed
-      if (onStickerEarned) {
-        onStickerEarned('pattern-puzzle-master');
-      }
-      resetGame();
-    }
+    const nextIndex = getRandomPuzzle();
+    setCurrentPuzzleIndex(nextIndex);
+    setUsedPuzzles(prev => [...prev, nextIndex]);
+    setSelectedAnswer(null);
+    setShowFeedback(false);
   };
 
   const closeGame = () => {

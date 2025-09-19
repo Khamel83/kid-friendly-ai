@@ -1438,6 +1438,68 @@ a {
   min-height: 0;
 }
 
+/* Game Overlay Layout - Hide main interface during games */
+.main-app-container.game-active {
+  position: relative;
+}
+
+.main-app-container.game-active .character-section,
+.main-app-container.game-active .game-buttons-container,
+.main-app-container.game-active .simple-controls,
+.main-app-container.game-active .chat-container {
+  display: none;
+}
+
+.main-app-container.game-active::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+  z-index: 1;
+}
+
+/* Game container should be full screen when active */
+.main-app-container.game-active .game-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  max-width: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Make games take full available space in overlay */
+.main-app-container.game-active .mini-game,
+.main-app-container.game-active .math-game,
+.main-app-container.game-active .pattern-puzzle-game,
+.main-app-container.game-active .animal-game-overlay {
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  margin: 0 auto;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 249, 255, 0.95) 100%);
+  backdrop-filter: blur(10px);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--accent-color);
+  overflow-y: auto;
+}
+
 .chat-history-container {
   flex: 1;
   background: rgba(255, 255, 255, 0.95);

@@ -693,8 +693,10 @@ export default function Home() {
     }
   }, [conversationHistory.length, triggerCelebration]);
 
+  const isAnyGameActive = showMiniGame || showMathGame || showPatternPuzzleGame || showAnimalGame;
+
   return (
-    <div className="container full-page-layout">
+    <div className={`container full-page-layout ${isAnyGameActive ? 'game-active' : ''}`}>
       <Head>
         <title>Kid-Friendly AI Buddy</title>
         <meta name="description" content="A simple, kid-friendly AI assistant" />
