@@ -481,9 +481,12 @@ export default function Home() {
         const lines = chunk.split('\n');
 
         for (const line of lines) {
-          if (line.startsWith('data:')) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          if (trimmedLine.startsWith('data:')) {
             try {
-              const dataString = line.substring(5).trim();
+              const dataString = trimmedLine.substring(5).trim();
               if (dataString === '[DONE]') continue;
 
               // Skip empty or obviously invalid data
