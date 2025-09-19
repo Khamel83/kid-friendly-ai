@@ -546,7 +546,7 @@ export class AnimalDatabase {
         habitat: 'Worldwide except Antarctica',
         diet: 'herbivore',
         size: 'small',
-        lifespan: 6 (workers), 5 (queens),
+        lifespan: '6 weeks (workers), 2-5 years (queens)',
         conservationStatus: 'least concern',
         funFacts: [
           'Bees communicate through dancing',
