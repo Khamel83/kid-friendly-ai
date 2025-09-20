@@ -80,10 +80,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-lite-001',
+              model: 'openai/gpt-4.1-nano',
               messages: llmMessages,
               temperature: 0.7,
-              max_tokens: 200,
+              max_tokens: 500,
               stream: true,
             }),
             signal: controller.signal
