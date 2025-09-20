@@ -9,6 +9,12 @@ interface HistoryMessage {
   text: string;
 }
 
+// Helper function to send SSE data
+function sendSse(res: NextApiResponse, id: string | number, data: object) {
+  res.write(`id: ${id}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST' && req.method !== 'GET') {
@@ -74,11 +80,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-flash-lite',
+              model: 'google/gemini-2.0-flash-lite-001',
               messages: llmMessages,
-              temperature: 0.8,
-              max_tokens: 500,
-              stream: false,
+              temperature: 0.7,
+              max_tokens: 200,
+              stream: true,
             }),
             signal: controller.signal
         });
@@ -105,13 +111,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             throw new Error('OpenRouter response body is null');
         }
 
-        // Get the complete response from OpenRouter
-        const data = await response.json();
-        const aiResponse = data.choices?.[0]?.message?.content || 'Sorry, I could not generate a response.';
+        if (!response.ok) {
+            // Handle non-OK initial response (e.g., 401, 429)
+            let errorMsg = `OpenRouter Error: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.error?.message || errorMsg;
+            } catch (e) { /* Ignore JSON parse error */ }
+            console.error(errorMsg);
+            // Send error via SSE if possible
+            if (!res.headersSent) {
+                res.status(response.status).json({ error: errorMsg });
+            } else {
+                sendSse(res, 'error', { type: 'error', content: errorMsg });
+                res.end();
+            }
+            return; // Stop processing
+        }
 
-        // Send simple JSON response
-        res.status(200).json({ response: aiResponse });
-        console.log('Sent JSON response from /api/ask (OpenRouter)');
+        if (!response.body) {
+            throw new Error('OpenRouter response body is null');
+        }
+
+        // Process the stream from OpenRouter (assuming OpenAI compatible format)
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let messageId = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                console.log('OpenRouter stream finished.');
+                break;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process buffer line by line for SSE format
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (line.startsWith('data:')) {
+                    const dataString = line.substring(5).trim();
+                    if (dataString === '[DONE]') {
+                        console.log('OpenRouter stream signaled [DONE]');
+                        // We will send our own 'done' event after the loop
+                        continue;
+                    }
+                    try {
+                        const chunk = JSON.parse(dataString);
+                        const content = chunk.choices[0]?.delta?.content || '';
+                        if (content) {
+                            sendSse(res, messageId++, { type: 'chunk', content });
+                        }
+                        if (chunk.choices[0]?.finish_reason) {
+                           console.log('OpenRouter stream finish reason:', chunk.choices[0]?.finish_reason);
+                        }
+                    } catch (parseError) {
+                        console.warn('Could not parse OpenRouter stream data chunk:', dataString, parseError);
+                    }
+                }
+            }
+        }
+
+        sendSse(res, messageId, { type: 'done' });
+        console.log('Finished sending SSE stream from /api/ask (OpenRouter)');
 
     // --- This is the catch block for the *inner* try (fetch/stream) ---
     } catch (innerError) {
@@ -136,9 +202,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         errorMessage = error.message;
     }
     
-    // Send error as JSON
+    // Error handling similar to before
     if (!res.headersSent) {
         res.status(500).json({ error: errorMessage });
+    } else {
+        try {
+            sendSse(res, 'error', { type: 'error', content: errorMessage });
+        } catch (sseError) {
+             console.error("Failed to send SSE error event:", sseError);
+        }
+        if (!res.writableEnded) {
+             res.end();
+        }
     }
   }
   // --- End of outer try-catch ---
