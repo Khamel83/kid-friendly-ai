@@ -63,24 +63,24 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
       'Sea Turtle': '🐢',
       'Red Fox': '🦊',
       'Zebra': '🦓',
-      'Kangaroo': '🦘',
+      'Red Kangaroo': '🦘',
       'Raccoon': '🦝',
-      'Eagle': '🦅',
-      'Frog': '🐸',
-      'Octopus': '🐙',
+      'Bald Eagle': '🦅',
+      'Poison Dart Frog': '🐸',
+      'Giant Pacific Octopus': '🐙',
       'Polar Bear': '🐻‍❄️',
-      'Wolf': '🐺',
+      'Gray Wolf': '🐺',
       'Hippopotamus': '🦛',
-      'Flamingo': '🦩',
-      'Peacock': '🦚',
-      'Tiger': '🐅',
-      'Monkey': '🐵',
-      'Snake': '🐍',
-      'Bat': '🦇',
-      'Sloth': '🦥',
-      'Armadillo': '🦦',
+      'American Flamingo': '🦩',
+      'Indian Peafowl': '🦚',
+      'Bengal Tiger': '🐅',
+      'Capuchin Monkey': '🐵',
+      'King Cobra': '🐍',
+      'Fruit Bat': '🦇',
+      'Three-toed Sloth': '🦥',
+      'Nine-banded Armadillo': '🦦',
       'Narwhal': '🦄',
-      'Bee': '🐝'
+      'Honey Bee': '🐝'
     };
     return emojiMap[animalName] || '🐾';
   };
@@ -337,7 +337,7 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
     return (
       <div className="animal-card">
         <div className="animal-header">
-          <h3>{animal.name}</h3>
+          <h3>{getAnimalEmoji(animal.name)} {animal.name}</h3>
           <span className={`conservation-status ${animal.conservationStatus.replace(' ', '-')}`}>
             {animal.conservationStatus}
           </span>
@@ -444,7 +444,7 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
         )}
 
         {question.options && (
-          <div className="answer-options">
+          <div className={`answer-options ${question.options.length === 4 ? 'grid-2x2' : ''}`}>
             {question.options.map((option, index) => (
               <button
                 key={index}
@@ -507,26 +507,29 @@ const AnimalGame: React.FC<AnimalGameProps> = ({ isOpen, onClose, onStickerEarne
             <div className="menu-options">
               <button onClick={() => startGame('quiz')} className="menu-button">
                 🧩 Animal Quiz
+                <br />
                 <small>Test your knowledge with fun questions!</small>
               </button>
               <button onClick={() => startGame('learning')} className="menu-button">
                 📚 Learn About Animals
+                <br />
                 <small>Choose any animal to explore and learn</small>
               </button>
               <button onClick={() => exploreAnimal(animalDatabase.getRandomAnimals(1)[0])} className="menu-button">
                 🎲 Random Animal
+                <br />
                 <small>Discover a surprise animal friend!</small>
               </button>
             </div>
 
             <div className="discovered-animals">
-              <h4>Animals Discovered ({gameState.animalsDiscovered.length}/10)</h4>
+              <h4>Animals Discovered ({gameState.animalsDiscovered.length})</h4>
               <div className="discovery-grid">
-                {gameState.animalsDiscovered.slice(0, 10).map(animalId => {
+                {gameState.animalsDiscovered.map(animalId => {
                   const animal = animalDatabase.getAnimalById(animalId);
                   return animal ? (
                     <div key={animalId} className="discovered-animal">
-                      {animal.name}
+                      {getAnimalEmoji(animal.name)} {animal.name}
                     </div>
                   ) : null;
                 })}

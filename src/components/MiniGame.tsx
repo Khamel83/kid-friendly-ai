@@ -437,7 +437,7 @@ export default function MiniGame({ onComplete }: MiniGameProps) {
 
             <div className="multiple-choice">
               <p className="question-text">What animal am I?</p>
-              <div className="options-grid">
+              <div className={`options-grid ${options.length === 4 ? 'grid-2x2' : ''}`}>
                 {options.map((option, index) => (
                   <button
                     key={index}

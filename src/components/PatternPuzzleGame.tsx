@@ -208,7 +208,7 @@ export default function PatternPuzzleGame({ isOpen, onClose, onStickerEarned }: 
 
             <div className="puzzle-options">
               <p>What comes next?</p>
-              <div className="options-grid">
+              <div className={`options-grid ${currentPuzzle.options.length === 4 ? 'grid-2x2' : ''}`}>
                 {currentPuzzle.options.map((option, index) => (
                   <button
                     key={index}
