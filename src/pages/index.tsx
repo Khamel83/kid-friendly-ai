@@ -226,6 +226,9 @@ export default function Home() {
     if (isStoppedRef.current) return; // Don't enqueue if stopped
     if (sentence.trim()) {
       console.log(`Enqueueing TTS for: "${sentence.trim().substring(0,30)}..."`);
+      // Clear any existing queue to prevent echoes
+      ttsRequestQueueRef.current = [];
+      audioPlaybackQueueRef.current = [];
       ttsRequestQueueRef.current.push(sentence.trim());
       // Start processing if not already running
       if (!isProcessingTtsQueueRef.current) {
@@ -469,7 +472,13 @@ export default function Home() {
         // Stop ongoing process and wait for cleanup
         console.log('Stopping any ongoing speech before starting new question...');
         await handleStopSpeaking();
-        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Clear all audio queues to prevent echoes
+        ttsRequestQueueRef.current = [];
+        audioPlaybackQueueRef.current = [];
+
+        // Additional delay to ensure cleanup
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Reset stop flag
         isStoppedRef.current = false;
@@ -531,7 +540,10 @@ export default function Home() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     question: text,
-                    conversationHistory: conversationHistory
+                    conversationHistory: conversationHistory.map(msg => ({
+                      speaker: msg.type,
+                      text: msg.text
+                    }))
                 }),
                 signal: abortControllerRef.current.signal
             });
