@@ -252,12 +252,22 @@ export default function Home() {
     setErrorMessage('');
 
     try {
-        // Fetch TTS audio
-        const response = await fetch('/api/tts', {
+        // Try ElevenLabs first (better quality, cheaper than OpenAI)
+        let response = await fetch('/api/elevenlabs-tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
         });
+
+        // Fallback to OpenAI if ElevenLabs fails
+        if (!response.ok) {
+            console.log('ElevenLabs failed, trying OpenAI TTS...');
+            response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text }),
+            });
+        }
 
         if (!response.ok) {
             throw new Error(`TTS Error ${response.status}`);
