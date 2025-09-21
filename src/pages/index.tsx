@@ -535,16 +535,19 @@ export default function Home() {
         };
 
         try {
+            const requestBody = {
+                question: text,
+                conversationHistory: conversationHistory.map(msg => ({
+                  speaker: msg.type,
+                  text: msg.text
+                }))
+            };
+            console.log('Sending request to /api/ask with body:', JSON.stringify(requestBody, null, 2));
+
             const response = await fetch('/api/ask', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    question: text,
-                    conversationHistory: conversationHistory.map(msg => ({
-                      speaker: msg.type,
-                      text: msg.text
-                    }))
-                }),
+                body: JSON.stringify(requestBody),
                 signal: abortControllerRef.current.signal
             });
 
@@ -554,6 +557,33 @@ export default function Home() {
                 try { const errorData = await response.json(); errorMsg = errorData.error || errorMsg; } catch { /* ignore */ }
                 throw new Error(errorMsg);
             }
+
+            // Check if response is JSON (OOS command or clarification) vs SSE stream
+            const contentType = response.headers.get('content-type');
+            if (contentType?.includes('application/json')) {
+                const jsonResponse = await response.json();
+
+                if (jsonResponse.isCommand || jsonResponse.needsClarification) {
+                    // Handle OOS slash command or clarification response
+                    console.log('OOS response:', jsonResponse);
+                    addMessageToHistory('ai', jsonResponse.message, true);
+                    setIsProcessing(false);
+
+                    // Add TTS for the command response
+                    if (jsonResponse.message.trim()) {
+                        enqueueTtsRequest(jsonResponse.message.trim());
+                    }
+
+                    // Add celebration for commands
+                    if (jsonResponse.isCommand) {
+                        addStars();
+                        EnhancedSoundManager.playCheerRandomSound();
+                    }
+
+                    return; // Exit early for command responses
+                }
+            }
+
             if (!response.body) throw new Error('Response body is null');
 
             readerRef.current = response.body.getReader();
@@ -960,6 +990,38 @@ export default function Home() {
             }}
           >
             🦁 Animal Adventure
+          </button>
+        </div>
+
+        {/* OOS Command Helper */}
+        <div className="command-helper">
+          <button
+            className="command-btn help-btn"
+            onClick={() => handleQuestionSubmit('/help')}
+            title="Get help"
+          >
+            🆘 Help
+          </button>
+          <button
+            className="command-btn fun-btn"
+            onClick={() => handleQuestionSubmit('/fun')}
+            title="Get a fun fact"
+          >
+            🎉 Fun Fact
+          </button>
+          <button
+            className="command-btn game-btn"
+            onClick={() => handleQuestionSubmit('/game')}
+            title="Start a game"
+          >
+            🎮 Game
+          </button>
+          <button
+            className="command-btn cheer-btn"
+            onClick={() => handleQuestionSubmit('/cheer')}
+            title="Get encouragement"
+          >
+            ⭐ Cheer
           </button>
         </div>
 

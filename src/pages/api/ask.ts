@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { systemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
+import { oosMiddleware } from '../../lib/oos-middleware';
 // Removed OpenAI import as it's no longer used here for chat
 // import OpenAI from 'openai'; 
 
@@ -31,7 +32,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Question is required' });
     }
 
-    // --- Use OpenRouter API Key --- 
+    // --- OOS Middleware Processing ---
+    const oosResult = await oosMiddleware.processInput(question);
+
+    if (oosResult.isCommand) {
+      // Handle slash command - return immediately with command response
+      return res.status(200).json({
+        message: oosResult.response,
+        isCommand: true
+      });
+    }
+
+    // Check if input needs clarification
+    const clarification = await oosMiddleware.clarifyKidInput(question);
+    if (clarification.needsClarification) {
+      return res.status(200).json({
+        message: clarification.suggestion,
+        needsClarification: true
+      });
+    }
+
+    // Use processed input from OOS
+    const processedQuestion = oosResult.processedInput || question;
+    // --- End OOS Middleware Processing ---
+
+    // --- Use OpenRouter API Key ---
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) {
       console.error('OpenRouter API key is not configured');
@@ -53,22 +78,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        // --- Format LLM messages with history ---
+        // --- OOS Context Optimization ---
+        const { optimizedHistory, tokensSaved } = await oosMiddleware.optimizeConversationHistory(
+          conversationHistory || [],
+          processedQuestion
+        );
+
+        console.log(`OOS optimization saved ${tokensSaved} tokens`);
+
+        // --- Format LLM messages with OOS optimized history ---
         const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-          { role: 'system', content: systemPrompt }
+          { role: 'system', content: oosMiddleware.generateOptimizedSystemPrompt() }
         ];
 
-        if (conversationHistory && conversationHistory.length > 0) {
-          conversationHistory.forEach(msg => {
-            llmMessages.push({
-              role: msg.speaker === 'ai' ? 'assistant' : 'user',
-              content: msg.speaker === 'user' ? formatUserQuestion(msg.text) : msg.text
-            });
+        console.log('OOS optimized conversation history:', optimizedHistory);
+
+        if (optimizedHistory && optimizedHistory.length > 0) {
+          optimizedHistory.forEach((msg, index) => {
+            const role = msg.speaker === 'ai' ? 'assistant' : 'user';
+            const content = msg.text;
+            console.log(`Optimized history message ${index}: role=${role}, content="${content}"`);
+            llmMessages.push({ role, content });
           });
         }
 
-        // Add the current user question last
-        llmMessages.push({ role: 'user', content: formatUserQuestion(question) });
+        // Add the current processed question last
+        console.log(`Current processed question: "${processedQuestion}"`);
+        llmMessages.push({ role: 'user', content: processedQuestion });
+
+        console.log('Complete OOS-optimized llmMessages being sent to AI:', JSON.stringify(llmMessages, null, 2));
         // --- End Format LLM messages ---
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -91,25 +129,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         clearTimeout(timeoutId);
         timeoutId = undefined; 
-
-        if (!response.ok) {
-            // Handle non-OK initial response (e.g., 401, 429)
-            let errorMsg = `OpenRouter Error: ${response.status} ${response.statusText}`;
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.error?.message || errorMsg;
-            } catch (e) { /* Ignore JSON parse error */ }
-            console.error(errorMsg);
-            // Send error as JSON
-            if (!res.headersSent) {
-                res.status(response.status).json({ error: errorMsg });
-            }
-            return; // Stop processing
-        }
-
-        if (!response.body) {
-            throw new Error('OpenRouter response body is null');
-        }
 
         if (!response.ok) {
             // Handle non-OK initial response (e.g., 401, 429)

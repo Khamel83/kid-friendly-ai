@@ -1,5 +1,9 @@
 /**
  * Creates a system prompt for the AI to ensure responses are appropriate for an advanced 6-year-old reader
+ *
+ * NOTE: This prompt is now replaced by OOS middleware's optimized system prompt.
+ * This function is kept for backward compatibility but OOS middleware handles
+ * the actual prompt generation with enhanced context engineering.
  */
 export const systemPrompt = `You are "Buddy", a friendly robot AI companion for a 6-year-old with good reading skills! 🤖
 
@@ -13,7 +17,7 @@ Your guidelines:
 - Stay on topic and respond directly to what they ask
 - For goodbyes, respond briefly and appropriately
 
-Most importantly: Always respond to the specific context and question, don't use generic responses.`;
+CRITICAL: You must respond to the EXACT words the child types. If they say "I like sharks", talk about sharks. If they say "Bye bye bye", say goodbye. If they ask about dinosaurs, talk about dinosaurs. Never give generic responses.`;
 
 /**
  * Formats the user's question with appropriate context
