@@ -30,7 +30,7 @@ export default function SimpleSpeechControls({
 
     const recognitionInstance = new SpeechRecognition();
     recognitionInstance.continuous = false;
-    recognitionInstance.interimResults = false;
+    recognitionInstance.interimResults = true;
     recognitionInstance.lang = initialLanguage;
 
     recognitionInstance.onstart = () => {
@@ -47,7 +47,7 @@ export default function SimpleSpeechControls({
         onResult(transcript);
       }
 
-      // Reset listening state
+      // Reset listening state - recognition will stop automatically with continuous: false
       setIsListening(false);
       onVoiceActivity?.(false);
     };
@@ -98,7 +98,10 @@ export default function SimpleSpeechControls({
   }, [initialLanguage, onResult, onError, onVoiceActivity]);
 
   const startListening = () => {
-    if (isListening || !recognition) return;
+    if (isListening || !recognition) {
+      console.log('Cannot start listening - isListening:', isListening, 'recognition exists:', !!recognition);
+      return;
+    }
 
     try {
       // Clear any existing timeout
@@ -106,11 +109,13 @@ export default function SimpleSpeechControls({
         clearTimeout(timeoutRef.current);
       }
 
+      console.log('Starting speech recognition...');
       recognition.start();
 
       // Set a timeout to auto-stop after 10 seconds
       timeoutRef.current = setTimeout(() => {
         if (isListening) {
+          console.log('Speech recognition timeout, stopping...');
           stopListening();
           onError('Listening timeout. Please try again.');
         }
@@ -122,9 +127,13 @@ export default function SimpleSpeechControls({
   };
 
   const stopListening = () => {
-    if (!isListening || !recognition) return;
+    if (!isListening || !recognition) {
+      console.log('Cannot stop listening - isListening:', isListening, 'recognition exists:', !!recognition);
+      return;
+    }
 
     try {
+      console.log('Stopping speech recognition...');
       recognition.stop();
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);

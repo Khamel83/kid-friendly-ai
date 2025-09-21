@@ -221,232 +221,132 @@ export default function Home() {
     });
   }, [isOnline]);
 
-  // --- Function to add sentence to TTS Queue (Updated with stop check) ---
+  // --- Simplified TTS Request - Single audio at a time ---
   const enqueueTtsRequest = useCallback((sentence: string) => {
-    if (isStoppedRef.current) return; // Don't enqueue if stopped
-    if (sentence.trim()) {
-      console.log(`Enqueueing TTS for: "${sentence.trim().substring(0,30)}..."`);
-      // Clear any existing queue to prevent echoes
-      ttsRequestQueueRef.current = [];
-      audioPlaybackQueueRef.current = [];
-      ttsRequestQueueRef.current.push(sentence.trim());
-      // Start processing if not already running
-      if (!isProcessingTtsQueueRef.current) {
-          processTtsQueue();
-      }
-    }
-  }, []); // Dependency array might need state setters if used directly
+    if (isStoppedRef.current || !sentence.trim()) return;
 
-  // --- Process TTS Request Queue (Reverted Initial Playback Trigger) ---
-  const processTtsQueue = useCallback(async () => {
-    if (isStoppedRef.current) { // Check stop flag
-        console.log("TTS Queue: Stop requested, exiting.");
-        isProcessingTtsQueueRef.current = false;
-        return;
-    }
-    if (isProcessingTtsQueueRef.current || ttsRequestQueueRef.current.length === 0) {
-        isProcessingTtsQueueRef.current = false; // Ensure lock is released if queue empty
-        return; // Already processing or queue is empty
+    console.log(`Processing TTS for: "${sentence.trim().substring(0,30)}..."`);
+
+    // Clear any existing audio to prevent echoes
+    ttsRequestQueueRef.current = [];
+    audioPlaybackQueueRef.current = [];
+
+    // Stop any currently playing audio
+    if (currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop();
+      } catch (e) { /* ignore */ }
+      currentAudioSourceRef.current = null;
     }
 
-    isProcessingTtsQueueRef.current = true; // Acquire lock
-    setErrorMessage(''); // Clear errors when starting new TTS processing
+    // Process immediately - no queue needed
+    processTtsQueue(sentence.trim());
+  }, []);
 
-    const sentenceToProcess = ttsRequestQueueRef.current.shift(); // Get next sentence
+  // --- Simplified TTS Processing - Direct audio playback ---
+  const processTtsQueue = useCallback(async (text: string) => {
+    if (isStoppedRef.current || isProcessingTtsQueueRef.current) return;
 
-    if (!sentenceToProcess) {
-        isProcessingTtsQueueRef.current = false; // Release lock if somehow sentence is undefined
-        return;
-    }
-
-    console.log(`Processing TTS for: "${sentenceToProcess.substring(0,30)}..."`);
-    if (!isStoppedRef.current) setIsSpeaking(true); // Indicate that we are actively trying to generate/queue speech
+    isProcessingTtsQueueRef.current = true;
+    setIsSpeaking(true);
+    setErrorMessage('');
 
     try {
+        // Fetch TTS audio
         const response = await fetch('/api/tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: sentenceToProcess }),
+            body: JSON.stringify({ text }),
         });
 
-        if (!response.ok || !response.body) {
-            let errorMsg = `TTS Error ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorMsg = errorData.error || errorMsg;
-            } catch { /* Ignore JSON parse error */ }
-            throw new Error(errorMsg);
+        if (!response.ok) {
+            throw new Error(`TTS Error ${response.status}`);
         }
 
-        if (isStoppedRef.current) return; // Check after fetch
+        if (isStoppedRef.current) return;
 
         const audioData = await response.arrayBuffer();
 
-        if (isStoppedRef.current) return; // Check after getting data
+        if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
 
-        if (!audioContextRef.current) throw new Error("AudioContext lost");
-        
-        // Resume context if needed
         if (audioContextRef.current.state === 'suspended') {
             await audioContextRef.current.resume();
         }
 
-        if (isStoppedRef.current) return; // Check after resume
+        if (isStoppedRef.current) return;
 
         const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
 
-        if (isStoppedRef.current) return; // Check after decode
-        
-        console.log(`Decoded buffer for sentence, duration: ${audioBuffer.duration}s`);
-        
-        // Add buffer to playback queue
-        audioPlaybackQueueRef.current.push(audioBuffer);
-        
-        // --- Reverted Trigger: Check queue length === 1 --- 
-        // Trigger playback if this is the first item added to the queue AND nothing is playing
-        if (audioPlaybackQueueRef.current.length === 1 && !isPlayingAudioSegmentRef.current) {
-           console.log("First playable audio chunk added to queue, starting playback chain.");
-           playNextAudioChunk(); // Start the chain
-        }
-        // --- End Reverted Trigger --- 
+        if (isStoppedRef.current) return;
+
+        // Play audio immediately
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioContextRef.current.destination);
+        currentAudioSourceRef.current = source;
+
+        source.onended = () => {
+            setIsSpeaking(false);
+            currentAudioSourceRef.current = null;
+            console.log('Audio playback finished');
+        };
+
+        source.start();
+        console.log(`Playing audio, duration: ${audioBuffer.duration}s`);
 
     } catch (error) {
-        if (!isStoppedRef.current) { // Only log/set error if not manually stopped
-            console.error('Error fetching or decoding TTS audio:', error);
-            const message = error instanceof Error ? error.message : 'Failed to get audio for a sentence.';
-            setErrorMessage(message);
+        if (!isStoppedRef.current) {
+            console.error('TTS Error:', error);
+            setErrorMessage('Sorry, I had trouble speaking');
+            setIsSpeaking(false);
         }
-        // Don't clear the whole speaking state on a single sentence failure
-        // Maybe add sentence back to queue? Or just drop it? For now, drop it.
     } finally {
-        // Release lock and immediately check if more items are in the queue
         isProcessingTtsQueueRef.current = false;
-        // Check queue again only if not stopped and queue has items
-        if (!isStoppedRef.current && ttsRequestQueueRef.current.length > 0) {
-           setTimeout(processTtsQueue, 0); 
-        }
     }
-  }, []); // Dependencies are minimal here
+  }, []);
 
 
-  // --- Play Next Audio Chunk from Queue (Added Stop Check in onended) ---
-  const playNextAudioChunk = useCallback(() => {
-    if (isStoppedRef.current) { // Check stop flag
-        console.log("Playback Queue: Stop requested, exiting.");
-        isPlayingAudioSegmentRef.current = false;
-        return;
-    }
-    if (isPlayingAudioSegmentRef.current || audioPlaybackQueueRef.current.length === 0 || !audioContextRef.current) {
-        // If nothing to play and queue empty, ensure speaking state is false
-        if(audioPlaybackQueueRef.current.length === 0 && !isPlayingAudioSegmentRef.current && !isProcessingTtsQueueRef.current) {
-           if (!isStoppedRef.current) setIsSpeaking(false);
-        }
-        return; // Already playing, queue empty, or context lost
-    }
-    
-    if (!isStoppedRef.current) setIsSpeaking(true); // Set speaking only if not stopped
-
-    const audioBufferToPlay = audioPlaybackQueueRef.current.shift(); // Get next buffer
-
-    if (!audioBufferToPlay) {
-        isPlayingAudioSegmentRef.current = false; // Release lock if buffer somehow undefined
-        if (!isStoppedRef.current) setIsSpeaking(false); // No buffer, not speaking
-        return;
-    }
-
-    console.log("Starting playback of next audio chunk...");
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = audioBufferToPlay;
-    source.connect(audioContextRef.current.destination);
-    currentAudioSourceRef.current = source;
-
-    source.onended = () => {
-        if (source.onended === null) {
-           console.log("onended called but was nullified (likely stopped).");
-           return;
-        }
-        
-        console.log("Audio chunk playback finished.");
-        source.disconnect(); 
-        if (currentAudioSourceRef.current === source) {
-            currentAudioSourceRef.current = null;
-        }
-        isPlayingAudioSegmentRef.current = false;
-        
-        // --- Added stop check before recursion --- 
-        if (isStoppedRef.current) {
-           console.log("onended: Stop flag is set, not continuing playback chain.");
-           return;
-        }
-        // --- End added stop check ---
-        
-        // Check if more chunks are ready AND not stopped
-        if (audioPlaybackQueueRef.current.length > 0) { 
-           playNextAudioChunk(); // Recursive call
-        } else if (!isProcessingTtsQueueRef.current) {
-           // No more chunks, check if TTS is still processing before setting isSpeaking=false
-           setIsSpeaking(false);
-        }
-    };
-
-    source.start();
-
-  }, []); // Dependencies are minimal here
 
 
-  // --- Define handleStopSpeaking with useCallback ---
+  // --- Simplified Stop Speaking ---
   const handleStopSpeaking = useCallback(async () => {
-    if (isStoppedRef.current) return; // Avoid running stop logic multiple times if already stopped
+    if (isStoppedRef.current) return;
 
-    isStoppedRef.current = true; // Set stop flag immediately
-    console.log("Stop Speaking requested. Halting audio, queues, and fetch.");
+    isStoppedRef.current = true;
+    console.log("Stop Speaking requested.");
 
     // 1. Abort the fetch request if active
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      console.log("Aborted active fetch request.");
     }
-    // Cancel any pending read on the stream reader
+
+    // 2. Cancel stream reader
     if (readerRef.current) {
        try {
-          await readerRef.current.cancel('User stopped'); // Pass reason for cancellation
-          console.log("Cancelled stream reader.");
-       } catch (cancelError) {
-          console.warn("Error cancelling stream reader:", cancelError);
-       }
+          await readerRef.current.cancel('User stopped');
+       } catch (e) { /* ignore */ }
        readerRef.current = null;
     }
 
-    // 2. Stop the currently playing audio source node
+    // 3. Stop audio
     if (currentAudioSourceRef.current) {
-      currentAudioSourceRef.current.onended = null; // Prevent onended from firing
+      currentAudioSourceRef.current.onended = null;
       try {
         currentAudioSourceRef.current.stop();
-        console.log("Stopped current audio source node.");
-      } catch (e) {
-        // Ignore errors often caused by stopping already stopped/finished node
-      }
+      } catch (e) { /* ignore */ }
       currentAudioSourceRef.current = null;
     }
 
-    // 3. Clear both queues immediately
+    // 4. Reset everything
     ttsRequestQueueRef.current = [];
     audioPlaybackQueueRef.current = [];
-    console.log("Cleared TTS request and audio playback queues.");
-
-    // 4. Reset processing/playback locks
-    isPlayingAudioSegmentRef.current = false;
     isProcessingTtsQueueRef.current = false;
-
-    // 5. Reset state variables
     setIsSpeaking(false);
     setIsProcessing(false);
-
-    // 6. Reset sentence buffer
-    sentenceBufferRef.current = '';
-
-    setErrorMessage(''); // Clear any transient errors
+    setErrorMessage('');
   }, []);
 
   // --- Handle Text Stream (Simplified - Single TTS Chunk) ---
@@ -558,29 +458,14 @@ export default function Home() {
                 throw new Error(errorMsg);
             }
 
-            // Check if response is JSON (OOS command or clarification) vs SSE stream
+            // Check for error responses
             const contentType = response.headers.get('content-type');
             if (contentType?.includes('application/json')) {
                 const jsonResponse = await response.json();
-
-                if (jsonResponse.isCommand || jsonResponse.needsClarification) {
-                    // Handle OOS slash command or clarification response
-                    console.log('OOS response:', jsonResponse);
-                    addMessageToHistory('ai', jsonResponse.message, true);
+                if (jsonResponse.error) {
+                    addMessageToHistory('ai', `Sorry, I had a problem: ${jsonResponse.error}`, true);
                     setIsProcessing(false);
-
-                    // Add TTS for the command response
-                    if (jsonResponse.message.trim()) {
-                        enqueueTtsRequest(jsonResponse.message.trim());
-                    }
-
-                    // Add celebration for commands
-                    if (jsonResponse.isCommand) {
-                        addStars();
-                        EnhancedSoundManager.playCheerRandomSound();
-                    }
-
-                    return; // Exit early for command responses
+                    return;
                 }
             }
 
@@ -990,38 +875,6 @@ export default function Home() {
             }}
           >
             🦁 Animal Adventure
-          </button>
-        </div>
-
-        {/* OOS Command Helper */}
-        <div className="command-helper">
-          <button
-            className="command-btn help-btn"
-            onClick={() => handleQuestionSubmit('/help')}
-            title="Get help"
-          >
-            🆘 Help
-          </button>
-          <button
-            className="command-btn fun-btn"
-            onClick={() => handleQuestionSubmit('/fun')}
-            title="Get a fun fact"
-          >
-            🎉 Fun Fact
-          </button>
-          <button
-            className="command-btn game-btn"
-            onClick={() => handleQuestionSubmit('/game')}
-            title="Start a game"
-          >
-            🎮 Game
-          </button>
-          <button
-            className="command-btn cheer-btn"
-            onClick={() => handleQuestionSubmit('/cheer')}
-            title="Get encouragement"
-          >
-            ⭐ Cheer
           </button>
         </div>
 

@@ -1,9 +1,8 @@
 /**
  * Creates a system prompt for the AI to ensure responses are appropriate for an advanced 6-year-old reader
  *
- * NOTE: This prompt is now replaced by OOS middleware's optimized system prompt.
- * This function is kept for backward compatibility but OOS middleware handles
- * the actual prompt generation with enhanced context engineering.
+ * NOTE: For development - OOS integration will help optimize this prompt and provide
+ * context engineering capabilities for better AI responses and token management.
  */
 export const systemPrompt = `You are "Buddy", a friendly robot AI companion for a 6-year-old with good reading skills! 🤖
 

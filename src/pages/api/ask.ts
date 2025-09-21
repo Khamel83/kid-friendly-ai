@@ -1,8 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { systemPrompt, formatUserQuestion } from '../../utils/aiPrompt';
-import { oosMiddleware } from '../../lib/oos-middleware';
-// Removed OpenAI import as it's no longer used here for chat
-// import OpenAI from 'openai'; 
+import { systemPrompt } from '../../utils/aiPrompt';
 
 // Define a type for the messages in the conversation history
 interface HistoryMessage {
@@ -32,29 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Question is required' });
     }
 
-    // --- OOS Middleware Processing ---
-    const oosResult = await oosMiddleware.processInput(question);
-
-    if (oosResult.isCommand) {
-      // Handle slash command - return immediately with command response
-      return res.status(200).json({
-        message: oosResult.response,
-        isCommand: true
-      });
+    // Keep only recent conversation history (last 6 messages)
+    let optimizedHistory = conversationHistory;
+    if (conversationHistory && conversationHistory.length > 6) {
+        optimizedHistory = conversationHistory.slice(-6);
+        console.log(`Trimmed conversation history from ${conversationHistory.length} to ${optimizedHistory.length} messages`);
     }
-
-    // Check if input needs clarification
-    const clarification = await oosMiddleware.clarifyKidInput(question);
-    if (clarification.needsClarification) {
-      return res.status(200).json({
-        message: clarification.suggestion,
-        needsClarification: true
-      });
-    }
-
-    // Use processed input from OOS
-    const processedQuestion = oosResult.processedInput || question;
-    // --- End OOS Middleware Processing ---
 
     // --- Use OpenRouter API Key ---
     const apiKey = process.env.OPENROUTER_API_KEY;
@@ -78,20 +58,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const controller = new AbortController();
         timeoutId = setTimeout(() => controller.abort(), 15000); 
 
-        // --- OOS Context Optimization ---
-        const { optimizedHistory, tokensSaved } = await oosMiddleware.optimizeConversationHistory(
-          conversationHistory || [],
-          processedQuestion
-        );
-
-        console.log(`OOS optimization saved ${tokensSaved} tokens`);
-
-        // --- Format LLM messages with OOS optimized history ---
+        // --- Format LLM messages with history ---
         const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-          { role: 'system', content: oosMiddleware.generateOptimizedSystemPrompt() }
+          { role: 'system', content: systemPrompt }
         ];
 
-        console.log('OOS optimized conversation history:', optimizedHistory);
+        console.log('Conversation history:', optimizedHistory);
 
         if (optimizedHistory && optimizedHistory.length > 0) {
           optimizedHistory.forEach((msg, index) => {
@@ -102,11 +74,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
 
-        // Add the current processed question last
-        console.log(`Current processed question: "${processedQuestion}"`);
-        llmMessages.push({ role: 'user', content: processedQuestion });
+        // Add the current user question last
+        console.log(`Current question: "${question}"`);
+        llmMessages.push({ role: 'user', content: question });
 
-        console.log('Complete OOS-optimized llmMessages being sent to AI:', JSON.stringify(llmMessages, null, 2));
+        console.log('Messages being sent to AI:', llmMessages.length, 'messages');
         // --- End Format LLM messages ---
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -114,11 +86,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${apiKey}`,
-              'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
+              'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://buddy.khamel.com',
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'openai/gpt-4.1-nano',
+              model: 'google/gemini-2.0-flash-001',
               messages: llmMessages,
               temperature: 0.7,
               max_tokens: 500,
