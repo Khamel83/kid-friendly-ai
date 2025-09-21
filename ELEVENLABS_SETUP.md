@@ -19,19 +19,20 @@
 ### 2. Add to Environment
 Update your `.env.local` file:
 ```bash
-# Replace with your actual ElevenLabs API key
-ELEVENLABS_API_KEY=el_your_actual_key_here
+# ElevenLabs API Key (configured)
+ELEVENLABS_API_KEY=sk_87219a6c0a9b228f283fcf7057a246a468a76cbdd6dc0783
 ```
 
 ### 3. Test It!
 Your kid-friendly AI will now use:
-1. **ElevenLabs** (FREE, human-quality voice)
-2. **OpenAI** (fallback if needed)
+1. **ElevenLabs ONLY** (FREE, human-quality voice)
+2. **Emergency browser TTS** (only if ElevenLabs service is down)
 
 ## Voice Used
-- **Rachel** - Warm, friendly female voice perfect for kids
+- **Voice ID: N2lVS1w4EtoT3dr4eOWO** - Kid-friendly voice selected specifically
 - Natural, expressive, clear pronunciation
 - No robotic sound!
+- Perfect for 6-year-old interactions
 
 ## Usage Limits
 - **10,000 characters/month FREE**

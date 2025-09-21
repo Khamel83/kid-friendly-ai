@@ -7,9 +7,11 @@ import MathGame from '../components/MathGame';
 import PatternPuzzleGame from '../components/PatternPuzzleGame';
 import AnimalGame from '../components/AnimalGame';
 import SoundControls from '../components/SoundControls';
+import QuotaWarning from '../components/QuotaWarning';
 // import OfflineIndicator from '../components/OfflineIndicator';
 import { EnhancedSoundManager } from '../utils/soundManager';
 import { useSoundControls, useSoundAccessibility } from '../hooks/useSoundEffects';
+import { usageTracker } from '../utils/usageTracker';
 // import { useOfflineManager, useOfflineState, useSyncOperations, useOfflineQueue } from '../hooks/useOfflineManager';
 import { SoundAccessibilityManager } from '../utils/soundAccessibility';
 import { register } from '../utils/registerServiceWorker';
@@ -61,6 +63,9 @@ export default function Home() {
 
   // Sound Controls States
   const [showSoundControls, setShowSoundControls] = useState(false);
+
+  // Usage Tracking States
+  const [showQuotaWarning, setShowQuotaWarning] = useState(false);
 
   // Hook into sound controls and accessibility
   const {
@@ -252,28 +257,28 @@ export default function Home() {
     setErrorMessage('');
 
     try {
-        // Try ElevenLabs first (better quality, cheaper than OpenAI)
-        let response = await fetch('/api/elevenlabs-tts', {
+        // Use ElevenLabs only - no OpenAI fallback
+        const response = await fetch('/api/elevenlabs-tts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ text }),
         });
 
-        // Fallback to OpenAI if ElevenLabs fails
         if (!response.ok) {
-            console.log('ElevenLabs failed, trying OpenAI TTS...');
-            response = await fetch('/api/tts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text }),
-            });
-        }
-
-        if (!response.ok) {
-            throw new Error(`TTS Error ${response.status}`);
+            throw new Error(`ElevenLabs TTS Error ${response.status}`);
         }
 
         if (isStoppedRef.current) return;
+
+        // Track character usage
+        if (typeof window !== 'undefined') {
+            usageTracker.addUsage(text.length);
+
+            // Check if limit reached and show warning
+            if (usageTracker.isLimitReached() || usageTracker.isNearLimit()) {
+                setTimeout(() => setShowQuotaWarning(true), 1000); // Show after audio plays
+            }
+        }
 
         const audioData = await response.arrayBuffer();
 
@@ -309,12 +314,73 @@ export default function Home() {
     } catch (error) {
         if (!isStoppedRef.current) {
             console.error('TTS Error:', error);
-            setErrorMessage('Sorry, I had trouble speaking');
-            setIsSpeaking(false);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+            // Check if this is a quota limit (don't fallback)
+            if (errorMessage.includes('429')) {
+                setErrorMessage("We've used up our talking time for today! Please ask a grown-up to help.");
+                setIsSpeaking(false);
+            } else if (errorMessage.includes('401') || errorMessage.includes('403')) {
+                setErrorMessage("I'm having trouble with my voice today. Please ask a grown-up to help.");
+                setIsSpeaking(false);
+            } else {
+                // Service failure - try emergency browser TTS
+                console.log('ElevenLabs service failed, trying emergency browser TTS...');
+                try {
+                    await emergencyBrowserTTS(text);
+                } catch (browserError) {
+                    console.error('Browser TTS also failed:', browserError);
+                    setErrorMessage("Sorry, I can't speak right now, but I can still chat with text!");
+                    setIsSpeaking(false);
+                }
+            }
         }
     } finally {
         isProcessingTtsQueueRef.current = false;
     }
+  }, []);
+
+  // --- Emergency Browser TTS Function ---
+  const emergencyBrowserTTS = useCallback(async (text: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (!('speechSynthesis' in window)) {
+        reject(new Error('Browser TTS not supported'));
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(text);
+
+      // Kid-friendly settings for emergency fallback
+      utterance.rate = 0.8;
+      utterance.pitch = 1.1;
+      utterance.volume = 0.7;
+
+      // Try to get a decent voice
+      const voices = speechSynthesis.getVoices();
+      const preferredVoice = voices.find(v =>
+        v.name.includes('Google') ||
+        v.name.includes('Samantha') ||
+        (v.lang.startsWith('en') && v.name.includes('Female'))
+      );
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        console.log('Emergency browser TTS finished');
+        resolve();
+      };
+
+      utterance.onerror = (event) => {
+        setIsSpeaking(false);
+        reject(new Error(`Browser TTS error: ${event.error}`));
+      };
+
+      console.log('Using emergency browser TTS (robot voice)');
+      speechSynthesis.speak(utterance);
+    });
   }, []);
 
 
@@ -1034,6 +1100,12 @@ export default function Home() {
           }}
         />
       ))}
+
+      {/* Quota Warning Modal */}
+      <QuotaWarning
+        isVisible={showQuotaWarning}
+        onClose={() => setShowQuotaWarning(false)}
+      />
 
     </div>
   );
