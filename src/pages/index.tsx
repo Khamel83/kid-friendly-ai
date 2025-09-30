@@ -42,7 +42,14 @@ export default function SimplePage() {
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
           setIsListening(false);
-          setError('Oops! Try again!');
+
+          if (event.error === 'no-speech') {
+            setError('Didn\'t hear anything. Try again!');
+          } else if (event.error === 'not-allowed') {
+            setError('Please allow microphone access!');
+          } else {
+            setError('Oops! Try again!');
+          }
         };
 
         recognitionRef.current.onend = () => {
@@ -58,11 +65,21 @@ export default function SimplePage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const startListening = () => {
-    if (recognitionRef.current) {
+  const startListening = async () => {
+    if (!recognitionRef.current) {
+      setError('Voice not supported in this browser. Try Chrome!');
+      return;
+    }
+
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true });
       setError('');
       setIsListening(true);
       recognitionRef.current.start();
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      setError('Please allow microphone access!');
+      setIsListening(false);
     }
   };
 
