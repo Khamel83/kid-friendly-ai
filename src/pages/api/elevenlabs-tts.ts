@@ -23,8 +23,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(503).json({ error: 'ElevenLabs not configured' });
     }
 
-    // Use ElevenLabs specified kid-friendly voice
-    const voiceId = 'N2lVS1w4EtoT3dr4eOWO'; // Kid-friendly voice selected by user
+    // Use ElevenLabs voice selected by user
+    const voiceId = 'X1tufN2s4pZ5Z7j8p23n'; // User's chosen voice from voice library
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
