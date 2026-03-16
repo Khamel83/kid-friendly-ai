@@ -47,8 +47,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log(`Sending streaming request to OpenRouter for question: "${question.substring(0, 50)}..." with history length: ${conversationHistory?.length ?? 0}`);
     
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders(); 
 
     let timeoutId: NodeJS.Timeout | undefined;

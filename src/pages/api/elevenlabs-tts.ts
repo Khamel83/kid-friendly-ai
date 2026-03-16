@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Use ElevenLabs voice selected by user
-    const voiceId = 'X1tufN2s4pZ5Z7j8p23n'; // User's chosen voice from voice library
+    const voiceId = 'nzFihrBIvB34imQBuxub'; // User's chosen voice from voice library
 
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
       method: 'POST',
@@ -35,12 +35,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       body: JSON.stringify({
         text: text,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_flash_v2_5',
         voice_settings: {
-          stability: 0.5,        // More expressive
-          similarity_boost: 0.8, // Keep voice consistent
-          style: 0.2,           // Slight style variation
-          use_speaker_boost: true
+          stability: 0.5,
+          similarity_boost: 0.8
         }
       })
     });

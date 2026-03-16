@@ -24,7 +24,12 @@ export default function SimplePage() {
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pendingTranscriptRef = useRef<string | null>(null);
+  const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const isPlayingRef = useRef<boolean>(false);
+  const elevenLabsAvailableRef = useRef<boolean>(true);
 
+  // Initialize speech recognition once on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -36,13 +41,14 @@ export default function SimplePage() {
 
         recognitionRef.current.onresult = (event: any) => {
           const transcript = event.results[0][0].transcript;
-          handleQuestion(transcript);
+          if (transcript) {
+            pendingTranscriptRef.current = transcript;
+          }
         };
 
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
           setIsListening(false);
-
           if (event.error === 'no-speech') {
             setError('Didn\'t hear anything. Try again!');
           } else if (event.error === 'not-allowed') {
@@ -54,6 +60,12 @@ export default function SimplePage() {
 
         recognitionRef.current.onend = () => {
           setIsListening(false);
+          // Process any pending transcript after recognition ends
+          if (pendingTranscriptRef.current) {
+            const transcript = pendingTranscriptRef.current;
+            pendingTranscriptRef.current = null;
+            handleQuestion(transcript);
+          }
         };
       }
 
@@ -65,21 +77,83 @@ export default function SimplePage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const startListening = async () => {
+  const startListening = () => {
     if (!recognitionRef.current) {
       setError('Voice not supported in this browser. Try Chrome!');
       return;
     }
 
+    setError('');
+    setIsListening(true);
+    pendingTranscriptRef.current = null;
+
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      setError('');
-      setIsListening(true);
       recognitionRef.current.start();
     } catch (err) {
-      console.error('Microphone permission error:', err);
-      setError('Please allow microphone access!');
+      console.error('Recognition start error:', err);
       setIsListening(false);
+      setError('Oops! Try again!');
+    }
+  };
+
+  const playNextInQueue = () => {
+    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
+      setIsSpeaking(false);
+      return;
+    }
+    isPlayingRef.current = true;
+    setIsSpeaking(true);
+    const buffer = audioQueueRef.current.shift()!;
+    const source = audioContextRef.current.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContextRef.current.destination);
+    source.onended = () => playNextInQueue();
+    source.start();
+  };
+
+  const enqueueSentence = async (sentence: string) => {
+    const trimmed = sentence.trim();
+    if (!trimmed) return;
+
+    if (audioContextRef.current?.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+
+    if (elevenLabsAvailableRef.current) {
+      try {
+        const response = await fetch('/api/elevenlabs-tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: trimmed })
+        });
+
+        if (response.status === 503) {
+          elevenLabsAvailableRef.current = false;
+        } else if (response.ok && audioContextRef.current) {
+          const audioData = await response.arrayBuffer();
+          const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
+          audioQueueRef.current.push(audioBuffer);
+          if (!isPlayingRef.current) playNextInQueue();
+          return;
+        }
+      } catch (err) {
+        console.error('ElevenLabs TTS error:', err);
+      }
+    }
+
+    // Fallback: browser TTS
+    if ('speechSynthesis' in window) {
+      setIsSpeaking(true);
+      const utterance = new SpeechSynthesisUtterance(trimmed);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+      utterance.onend = () => {
+        if (audioQueueRef.current.length === 0 && !isPlayingRef.current) {
+          setIsSpeaking(false);
+        }
+      };
+      speechSynthesis.speak(utterance);
     }
   };
 
@@ -105,6 +179,8 @@ export default function SimplePage() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
+      let sentenceBuffer = '';
+      let aiMessageAdded = false;
 
       if (reader) {
         while (true) {
@@ -123,6 +199,27 @@ export default function SimplePage() {
                 const parsed = JSON.parse(data);
                 if (parsed.type === 'chunk' && parsed.content) {
                   aiResponse += parsed.content;
+                  sentenceBuffer += parsed.content;
+
+                  // Update UI with partial response
+                  if (!aiMessageAdded) {
+                    setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
+                    aiMessageAdded = true;
+                  } else {
+                    setMessages(prev => {
+                      const updated = [...prev];
+                      updated[updated.length - 1] = { type: 'ai', text: aiResponse };
+                      return updated;
+                    });
+                  }
+
+                  // Flush complete sentences to TTS immediately
+                  const match = sentenceBuffer.search(/[.!?]\s/);
+                  if (match !== -1) {
+                    const sentence = sentenceBuffer.substring(0, match + 1);
+                    sentenceBuffer = sentenceBuffer.substring(match + 2);
+                    enqueueSentence(sentence);
+                  }
                 }
               } catch (e) {}
             }
@@ -130,49 +227,16 @@ export default function SimplePage() {
         }
       }
 
-      if (aiResponse) {
-        setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
-        speakText(aiResponse);
+      // Speak any remaining text
+      if (sentenceBuffer.trim()) {
+        enqueueSentence(sentenceBuffer.trim());
       }
+
+      // If nothing was enqueued (empty response or TTS not available and no browser TTS), clear state
+      if (!aiResponse) setIsSpeaking(false);
     } catch (err) {
       console.error('Error:', err);
       setError('Something went wrong. Try again!');
-    }
-  };
-
-  const speakText = async (text: string) => {
-    setIsSpeaking(true);
-
-    try {
-      const response = await fetch('/api/elevenlabs-tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-
-      if (response.ok && audioContextRef.current) {
-        const audioData = await response.arrayBuffer();
-        const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContextRef.current.destination);
-
-        source.onended = () => setIsSpeaking(false);
-        source.start();
-      } else {
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.rate = 0.9;
-          utterance.pitch = 1.1;
-          utterance.onend = () => setIsSpeaking(false);
-          speechSynthesis.speak(utterance);
-        } else {
-          setIsSpeaking(false);
-        }
-      }
-    } catch (error) {
-      console.error('TTS error:', error);
       setIsSpeaking(false);
     }
   };
@@ -208,6 +272,11 @@ export default function SimplePage() {
           <button className="game-card memory" onClick={() => setShowMemory(true)}>
             <div className="game-icon">🧠</div>
             <div className="game-name">Memory</div>
+          </button>
+
+          <button className="game-card dada" onClick={() => window.location.href = 'https://dada.khamel.com'}>
+            <div className="game-icon">💌</div>
+            <div className="game-name">Send to Dada</div>
           </button>
         </div>
 
@@ -292,6 +361,15 @@ export default function SimplePage() {
 
         .game-card:active {
           transform: translateY(-2px);
+        }
+
+        .game-card.dada {
+          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+          grid-column: 1 / -1;
+        }
+
+        .game-card.dada .game-name {
+          color: white;
         }
 
         .game-icon {
