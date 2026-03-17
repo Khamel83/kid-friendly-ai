@@ -13,7 +13,6 @@ interface Message {
 export default function SimplePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState('');
 
   const [showMath, setShowMath] = useState(false);
@@ -22,12 +21,9 @@ export default function SimplePage() {
   const [showMemory, setShowMemory] = useState(false);
 
   const recognitionRef = useRef<any>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pendingTranscriptRef = useRef<string | null>(null);
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
-  const isPlayingRef = useRef<boolean>(false);
-  const elevenLabsAvailableRef = useRef<boolean>(true);
+  const isListeningRef = useRef<boolean>(false);
 
   // Initialize speech recognition once on mount
   useEffect(() => {
@@ -35,41 +31,48 @@ export default function SimplePage() {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = false;
-        recognitionRef.current.interimResults = false;
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          if (transcript) {
-            pendingTranscriptRef.current = transcript;
+          // Accumulate all final results
+          let transcript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              transcript += event.results[i][0].transcript + ' ';
+            }
+          }
+          if (transcript.trim()) {
+            pendingTranscriptRef.current = transcript.trim();
           }
         };
 
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
-          setIsListening(false);
-          if (event.error === 'no-speech') {
-            setError('Didn\'t hear anything. Try again!');
-          } else if (event.error === 'not-allowed') {
+          if (event.error === 'not-allowed') {
+            setIsListening(false);
             setError('Please allow microphone access!');
-          } else {
-            setError('Oops! Try again!');
           }
+          // Ignore no-speech errors while holding button
         };
 
         recognitionRef.current.onend = () => {
-          setIsListening(false);
-          // Process any pending transcript after recognition ends
-          if (pendingTranscriptRef.current) {
-            const transcript = pendingTranscriptRef.current;
-            pendingTranscriptRef.current = null;
-            handleQuestion(transcript);
+          // Only process if we're no longer listening (button released)
+          if (!isListeningRef.current) {
+            setIsListening(false);
+            if (pendingTranscriptRef.current) {
+              const transcript = pendingTranscriptRef.current;
+              pendingTranscriptRef.current = null;
+              handleQuestion(transcript);
+            }
+          } else {
+            // Button still held — restart recognition (browser stops after ~60s)
+            try { recognitionRef.current.start(); } catch (e) {}
           }
         };
       }
 
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
   }, []);
 
@@ -84,6 +87,7 @@ export default function SimplePage() {
     }
 
     setError('');
+    isListeningRef.current = true;
     setIsListening(true);
     pendingTranscriptRef.current = null;
 
@@ -91,70 +95,18 @@ export default function SimplePage() {
       recognitionRef.current.start();
     } catch (err) {
       console.error('Recognition start error:', err);
+      isListeningRef.current = false;
       setIsListening(false);
       setError('Oops! Try again!');
     }
   };
 
-  const playNextInQueue = () => {
-    if (!audioContextRef.current || audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setIsSpeaking(false);
-      return;
-    }
-    isPlayingRef.current = true;
-    setIsSpeaking(true);
-    const buffer = audioQueueRef.current.shift()!;
-    const source = audioContextRef.current.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContextRef.current.destination);
-    source.onended = () => playNextInQueue();
-    source.start();
-  };
-
-  const enqueueSentence = async (sentence: string) => {
-    const trimmed = sentence.trim();
-    if (!trimmed) return;
-
-    if (audioContextRef.current?.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-
-    if (elevenLabsAvailableRef.current) {
-      try {
-        const response = await fetch('/api/elevenlabs-tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: trimmed })
-        });
-
-        if (response.status === 503) {
-          elevenLabsAvailableRef.current = false;
-        } else if (response.ok && audioContextRef.current) {
-          const audioData = await response.arrayBuffer();
-          const audioBuffer = await audioContextRef.current.decodeAudioData(audioData);
-          audioQueueRef.current.push(audioBuffer);
-          if (!isPlayingRef.current) playNextInQueue();
-          return;
-        }
-      } catch (err) {
-        console.error('ElevenLabs TTS error:', err);
-      }
-    }
-
-    // Fallback: browser TTS
-    if ('speechSynthesis' in window) {
-      setIsSpeaking(true);
-      const utterance = new SpeechSynthesisUtterance(trimmed);
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
-      utterance.onend = () => {
-        if (audioQueueRef.current.length === 0 && !isPlayingRef.current) {
-          setIsSpeaking(false);
-        }
-      };
-      speechSynthesis.speak(utterance);
-    }
+  const stopListening = () => {
+    if (!isListeningRef.current) return;
+    isListeningRef.current = false;
+    try {
+      recognitionRef.current?.stop();
+    } catch (err) {}
   };
 
   const handleQuestion = async (question: string) => {
@@ -179,7 +131,6 @@ export default function SimplePage() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
-      let sentenceBuffer = '';
       let aiMessageAdded = false;
 
       if (reader) {
@@ -194,14 +145,10 @@ export default function SimplePage() {
             if (line.startsWith('data:')) {
               const data = line.substring(5).trim();
               if (data === '[DONE]') continue;
-
               try {
                 const parsed = JSON.parse(data);
                 if (parsed.type === 'chunk' && parsed.content) {
                   aiResponse += parsed.content;
-                  sentenceBuffer += parsed.content;
-
-                  // Update UI with partial response
                   if (!aiMessageAdded) {
                     setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
                     aiMessageAdded = true;
@@ -212,14 +159,6 @@ export default function SimplePage() {
                       return updated;
                     });
                   }
-
-                  // Flush complete sentences to TTS immediately
-                  const match = sentenceBuffer.search(/[.!?]\s/);
-                  if (match !== -1) {
-                    const sentence = sentenceBuffer.substring(0, match + 1);
-                    sentenceBuffer = sentenceBuffer.substring(match + 2);
-                    enqueueSentence(sentence);
-                  }
                 }
               } catch (e) {}
             }
@@ -227,17 +166,9 @@ export default function SimplePage() {
         }
       }
 
-      // Speak any remaining text
-      if (sentenceBuffer.trim()) {
-        enqueueSentence(sentenceBuffer.trim());
-      }
-
-      // If nothing was enqueued (empty response or TTS not available and no browser TTS), clear state
-      if (!aiResponse) setIsSpeaking(false);
     } catch (err) {
       console.error('Error:', err);
       setError('Something went wrong. Try again!');
-      setIsSpeaking(false);
     }
   };
 
@@ -300,11 +231,15 @@ export default function SimplePage() {
 
           <div className="controls">
             <button
-              className={`talk-button ${isListening ? 'listening' : ''} ${isSpeaking ? 'speaking' : ''}`}
-              onClick={startListening}
-              disabled={isListening || isSpeaking}
+              className={`talk-button ${isListening ? 'listening' : ''}`}
+              onMouseDown={startListening}
+              onMouseUp={stopListening}
+              onMouseLeave={stopListening}
+              onTouchStart={(e) => { e.preventDefault(); startListening(); }}
+              onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
+              disabled={isListening}
             >
-              {isListening ? '🎤 Listening...' : isSpeaking ? '🔊 Speaking...' : '🎤 Talk'}
+              {isListening ? '🎤 Listening...' : '🎤 Hold to Talk'}
             </button>
           </div>
         </div>
