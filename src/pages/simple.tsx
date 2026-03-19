@@ -4,6 +4,8 @@ import SimpleMathGame from '../components/SimpleMathGame';
 import SimpleAnimalQuiz from '../components/SimpleAnimalQuiz';
 import SimpleWordGame from '../components/SimpleWordGame';
 import SimpleMemoryGame from '../components/SimpleMemoryGame';
+import SpaceExplorerGame from '../components/SpaceExplorerGame';
+import EmojiDetectiveGame from '../components/EmojiDetectiveGame';
 
 interface Message {
   type: 'user' | 'ai';
@@ -20,6 +22,8 @@ export default function SimplePage() {
   const [showAnimal, setShowAnimal] = useState(false);
   const [showWord, setShowWord] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
+  const [showSpace, setShowSpace] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -192,6 +196,16 @@ export default function SimplePage() {
             <div className="game-icon">🧠</div>
             <div className="game-name">Memory</div>
           </button>
+
+          <button className="game-card space" onClick={() => setShowSpace(true)}>
+            <div className="game-icon">🚀</div>
+            <div className="game-name">Space</div>
+          </button>
+
+          <button className="game-card emoji" onClick={() => setShowEmoji(true)}>
+            <div className="game-icon">🔍</div>
+            <div className="game-name">Emoji</div>
+          </button>
         </div>
 
         <div className="chat-container">
@@ -227,6 +241,8 @@ export default function SimplePage() {
         {showAnimal && <SimpleAnimalQuiz onClose={() => setShowAnimal(false)} />}
         {showWord && <SimpleWordGame onClose={() => setShowWord(false)} />}
         {showMemory && <SimpleMemoryGame onClose={() => setShowMemory(false)} />}
+        {showSpace && <SpaceExplorerGame onClose={() => setShowSpace(false)} />}
+        {showEmoji && <EmojiDetectiveGame onClose={() => setShowEmoji(false)} />}
       </div>
 
       <style jsx>{`
@@ -250,10 +266,10 @@ export default function SimplePage() {
 
         .games-grid {
           display: grid;
-          grid-template-columns: repeat(2, 1fr);
+          grid-template-columns: repeat(3, 1fr);
           gap: 16px;
           margin-bottom: 24px;
-          max-width: 600px;
+          max-width: 700px;
           margin-left: auto;
           margin-right: auto;
         }
@@ -424,6 +440,7 @@ export default function SimplePage() {
 
           .games-grid {
             gap: 12px;
+            grid-template-columns: repeat(2, 1fr);
           }
 
           .game-card {
