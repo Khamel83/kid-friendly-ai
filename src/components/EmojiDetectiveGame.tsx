@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 
 interface EmojiDetectiveGameProps {
   onClose: () => void;
@@ -7,135 +7,145 @@ interface EmojiDetectiveGameProps {
 interface Puzzle {
   emojis: string;
   answer: string;
-  hint: string;
   category: string;
 }
 
-const puzzles: Puzzle[] = [
+const allPuzzles: Puzzle[] = [
   // Animals
-  { emojis: '🌊 🐋', answer: 'whale', hint: 'It lives in the ocean', category: '🐾 Animals' },
-  { emojis: '🌿 🦒', answer: 'giraffe', hint: 'Very tall neck', category: '🐾 Animals' },
-  { emojis: '🐘 🌍', answer: 'elephant', hint: 'Biggest land animal', category: '🐾 Animals' },
-  { emojis: '🦋 🌸', answer: 'butterfly', hint: 'Beautiful wings', category: '🐾 Animals' },
-  { emojis: '🌙 🐺', answer: 'wolf', hint: 'Howls at night', category: '🐾 Animals' },
-  { emojis: '🐾 🌲', answer: 'bear', hint: 'Loves honey and forests', category: '🐾 Animals' },
+  { emojis: '🌊 🐋', answer: 'Whale', category: '🐾 Animals' },
+  { emojis: '🌿 🦒', answer: 'Giraffe', category: '🐾 Animals' },
+  { emojis: '🐘 🌍', answer: 'Elephant', category: '🐾 Animals' },
+  { emojis: '🦋 🌸', answer: 'Butterfly', category: '🐾 Animals' },
+  { emojis: '🌙 🐺', answer: 'Wolf', category: '🐾 Animals' },
+  { emojis: '🍯 🐻', answer: 'Bear', category: '🐾 Animals' },
+  { emojis: '🌳 🐒', answer: 'Monkey', category: '🐾 Animals' },
+  { emojis: '🌊 🦈', answer: 'Shark', category: '🐾 Animals' },
+  { emojis: '🦁 👑', answer: 'Lion', category: '🐾 Animals' },
+  { emojis: '🐢 🌊', answer: 'Turtle', category: '🐾 Animals' },
+  { emojis: '🐧 ❄️', answer: 'Penguin', category: '🐾 Animals' },
+  { emojis: '🦊 🌲', answer: 'Fox', category: '🐾 Animals' },
+  { emojis: '🦓 🌿', answer: 'Zebra', category: '🐾 Animals' },
+  { emojis: '🐸 🌧️', answer: 'Frog', category: '🐾 Animals' },
+  { emojis: '🕷️ 🕸️', answer: 'Spider', category: '🐾 Animals' },
 
   // Food
-  { emojis: '🍅 🧀 🍕', answer: 'pizza', hint: 'Baked in an oven', category: '🍔 Food' },
-  { emojis: '🍌 🥛 🍦', answer: 'milkshake', hint: 'A cold drink you sip', category: '🍔 Food' },
-  { emojis: '🥚 🍳', answer: 'eggs', hint: 'Breakfast favorite', category: '🍔 Food' },
-  { emojis: '🍓 🍰', answer: 'cake', hint: 'Birthday treat', category: '🍔 Food' },
-  { emojis: '🌽 🧈', answer: 'popcorn', hint: 'Movie time snack', category: '🍔 Food' },
-  { emojis: '🍯 🥜', answer: 'peanut butter', hint: 'Spread on bread', category: '🍔 Food' },
+  { emojis: '🍅 🧀 🍕', answer: 'Pizza', category: '🍔 Food' },
+  { emojis: '🍌 🥛 🍦', answer: 'Milkshake', category: '🍔 Food' },
+  { emojis: '🥚 🍳', answer: 'Eggs', category: '🍔 Food' },
+  { emojis: '🍓 🎂', answer: 'Cake', category: '🍔 Food' },
+  { emojis: '🌽 🔥', answer: 'Popcorn', category: '🍔 Food' },
+  { emojis: '🍯 🥜', answer: 'Peanut Butter', category: '🍔 Food' },
+  { emojis: '🍫 🥛', answer: 'Hot Chocolate', category: '🍔 Food' },
+  { emojis: '🍞 🧈', answer: 'Toast', category: '🍔 Food' },
+  { emojis: '🍎 🥧', answer: 'Apple Pie', category: '🍔 Food' },
+  { emojis: '🥕 🫕', answer: 'Soup', category: '🍔 Food' },
+  { emojis: '🍦 🍫', answer: 'Ice Cream', category: '🍔 Food' },
+  { emojis: '🥞 🍁', answer: 'Pancakes', category: '🍔 Food' },
 
   // Movies & Stories
-  { emojis: '🦁 👑', answer: 'lion king', hint: 'Disney movie with Simba', category: '🎬 Movies' },
-  { emojis: '❄️ ⛄ 👸', answer: 'frozen', hint: 'Let it go!', category: '🎬 Movies' },
-  { emojis: '🐟 🌊 🔍', answer: 'finding nemo', hint: 'Just keep swimming', category: '🎬 Movies' },
-  { emojis: '🚂 🧙 ⚡', answer: 'harry potter', hint: 'Magic school train', category: '🎬 Movies' },
-  { emojis: '🕷️ 🏙️', answer: 'spider-man', hint: 'Swings between buildings', category: '🎬 Movies' },
-  { emojis: '🧸 🤠', answer: 'toy story', hint: 'To infinity and beyond', category: '🎬 Movies' },
+  { emojis: '❄️ ⛄ 👸', answer: 'Frozen', category: '🎬 Movies' },
+  { emojis: '🐟 🌊 🔍', answer: 'Finding Nemo', category: '🎬 Movies' },
+  { emojis: '🚂 🧙 ⚡', answer: 'Harry Potter', category: '🎬 Movies' },
+  { emojis: '🧸 🤠', answer: 'Toy Story', category: '🎬 Movies' },
+  { emojis: '🦁 👑', answer: 'Lion King', category: '🎬 Movies' },
+  { emojis: '🕷️ 🏙️', answer: 'Spider-Man', category: '🎬 Movies' },
+  { emojis: '🐠 🌊 🔵', answer: 'Moana', category: '🎬 Movies' },
+  { emojis: '🐭 🍽️ 👨‍🍳', answer: 'Ratatouille', category: '🎬 Movies' },
+  { emojis: '👻 🏚️', answer: 'Ghostbusters', category: '🎬 Movies' },
+  { emojis: '🦸 🌩️ ⚡', answer: 'Thor', category: '🎬 Movies' },
+  { emojis: '🧁 🎩 🐛', answer: 'Alice in Wonderland', category: '🎬 Movies' },
+  { emojis: '🦌 🌲 🍄', answer: 'Bambi', category: '🎬 Movies' },
 
   // Activities
-  { emojis: '🌊 🏄', answer: 'surfing', hint: 'Ride the waves', category: '⚡ Activities' },
-  { emojis: '🎸 🎤 🎵', answer: 'singing', hint: 'Use your voice', category: '⚡ Activities' },
-  { emojis: '⚽ 🥅', answer: 'soccer', hint: 'Kick the ball in the net', category: '⚡ Activities' },
-  { emojis: '🎨 🖌️', answer: 'painting', hint: 'Make art with color', category: '⚡ Activities' },
-  { emojis: '📚 💡', answer: 'reading', hint: 'You do this with books', category: '⚡ Activities' },
-  { emojis: '🏔️ 🎿', answer: 'skiing', hint: 'Down snowy mountains', category: '⚡ Activities' },
+  { emojis: '🌊 🏄', answer: 'Surfing', category: '⚡ Activities' },
+  { emojis: '⚽ 🥅', answer: 'Soccer', category: '⚡ Activities' },
+  { emojis: '🎨 🖌️', answer: 'Painting', category: '⚡ Activities' },
+  { emojis: '📚 💡', answer: 'Reading', category: '⚡ Activities' },
+  { emojis: '🏔️ 🎿', answer: 'Skiing', category: '⚡ Activities' },
+  { emojis: '🎸 🎤', answer: 'Singing', category: '⚡ Activities' },
+  { emojis: '🏊 🌊', answer: 'Swimming', category: '⚡ Activities' },
+  { emojis: '🚴 🏆', answer: 'Cycling', category: '⚡ Activities' },
+  { emojis: '🎃 🍬', answer: 'Halloween', category: '⚡ Activities' },
+  { emojis: '🎂 🎉', answer: 'Birthday', category: '⚡ Activities' },
+  { emojis: '⛺ 🌲 🔥', answer: 'Camping', category: '⚡ Activities' },
+  { emojis: '🌙 ⭐ 😴', answer: 'Sleeping', category: '⚡ Activities' },
 
   // Places
-  { emojis: '🗼 🇫🇷', answer: 'paris', hint: 'City of lights in France', category: '🌍 Places' },
-  { emojis: '🏖️ ☀️ 🌴', answer: 'beach', hint: 'Sand and waves', category: '🌍 Places' },
-  { emojis: '🏔️ ❄️', answer: 'mountain', hint: 'Very tall, snow on top', category: '🌍 Places' },
-  { emojis: '🌵 ☀️ 🦎', answer: 'desert', hint: 'Hot and dry', category: '🌍 Places' },
-  { emojis: '🌳 🦜 🐆', answer: 'jungle', hint: 'Dense forest with wild animals', category: '🌍 Places' },
-  { emojis: '🚀 🌙 ⭐', answer: 'space', hint: 'The final frontier', category: '🌍 Places' },
+  { emojis: '🗼 🇫🇷', answer: 'Paris', category: '🌍 Places' },
+  { emojis: '🏖️ ☀️ 🌴', answer: 'Beach', category: '🌍 Places' },
+  { emojis: '🏔️ ❄️', answer: 'Mountain', category: '🌍 Places' },
+  { emojis: '🌵 ☀️ 🦎', answer: 'Desert', category: '🌍 Places' },
+  { emojis: '🌳 🦜 🐆', answer: 'Jungle', category: '🌍 Places' },
+  { emojis: '🚀 🌙 ⭐', answer: 'Space', category: '🌍 Places' },
+  { emojis: '🏰 👸 🗡️', answer: 'Castle', category: '🌍 Places' },
+  { emojis: '🌊 🐟 🤿', answer: 'Ocean', category: '🌍 Places' },
+  { emojis: '🌾 🐄 🚜', answer: 'Farm', category: '🌍 Places' },
+  { emojis: '🎡 🎢 🎠', answer: 'Carnival', category: '🌍 Places' },
 ];
 
-function normalize(str: string) {
-  return str.toLowerCase().replace(/[-\s]+/g, ' ').trim();
+function shuffle<T>(arr: T[]): T[] {
+  return [...arr].sort(() => Math.random() - 0.5);
+}
+
+function pickOptions(correct: string, all: Puzzle[]): string[] {
+  const wrong = shuffle(all.filter(p => p.answer !== correct))
+    .slice(0, 5)
+    .map(p => p.answer);
+  return shuffle([...wrong, correct]);
 }
 
 export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps) {
-  const [shuffled] = useState(() => [...puzzles].sort(() => Math.random() - 0.5));
+  const [gameKey, setGameKey] = useState(0);
+
+  const puzzlesWithOptions = useMemo(() => {
+    return shuffle(allPuzzles).map(p => ({
+      ...p,
+      options: pickOptions(p.answer, allPuzzles),
+    }));
+  }, [gameKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [index, setIndex] = useState(0);
-  const [input, setInput] = useState('');
-  const [lives, setLives] = useState(3);
   const [score, setScore] = useState(0);
-  const [hintUsed, setHintUsed] = useState(false);
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | 'hint' | null>(null);
-  const [phase, setPhase] = useState<'playing' | 'complete' | 'gameover'>('playing');
+  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [phase, setPhase] = useState<'playing' | 'complete'>('playing');
   const [shake, setShake] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [wrongAnswer, setWrongAnswer] = useState('');
 
-  const puzzle = shuffled[index];
+  const puzzle = puzzlesWithOptions[index];
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [index]);
-
-  const showFeedback = (type: 'correct' | 'wrong' | 'hint', duration = 1200) => {
-    setFeedback(type);
-    setTimeout(() => setFeedback(null), duration);
-  };
-
-  const handleGuess = () => {
-    const guess = normalize(input);
-    const answer = normalize(puzzle.answer);
-
-    if (guess === answer) {
-      const points = hintUsed ? 5 : 10;
-      setScore(s => s + points);
-      showFeedback('correct');
-      setInput('');
-      setHintUsed(false);
-
+  const handleGuess = (option: string) => {
+    if (option === puzzle.answer) {
+      setScore(s => s + 10);
+      setFeedback('correct');
       setTimeout(() => {
-        if (index + 1 >= shuffled.length) {
+        setFeedback(null);
+        if (index + 1 >= puzzlesWithOptions.length) {
           setPhase('complete');
         } else {
           setIndex(i => i + 1);
         }
       }, 1000);
     } else {
-      const newLives = lives - 1;
-      setLives(newLives);
-      showFeedback('wrong');
+      setWrongAnswer(option);
+      setFeedback('wrong');
       setShake(true);
-      setTimeout(() => setShake(false), 400);
-      setInput('');
-
-      if (newLives <= 0) {
-        setTimeout(() => setPhase('gameover'), 1000);
-      }
-    }
-  };
-
-  const handleHint = () => {
-    if (!hintUsed) {
-      setHintUsed(true);
-      showFeedback('hint', 2000);
+      setTimeout(() => {
+        setShake(false);
+        setFeedback(null);
+        setWrongAnswer('');
+      }, 900);
     }
   };
 
   const handleRestart = () => {
+    setGameKey(k => k + 1);
     setIndex(0);
-    setInput('');
-    setLives(3);
     setScore(0);
-    setHintUsed(false);
     setFeedback(null);
     setPhase('playing');
+    setShake(false);
+    setWrongAnswer('');
   };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleGuess();
-  };
-
-  const livesDisplay = Array.from({ length: 3 }).map((_, i) =>
-    i < lives ? '❤️' : '🖤'
-  );
 
   return (
     <div className="overlay">
@@ -143,72 +153,41 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
         <button className="close-btn" onClick={onClose}>✕</button>
 
         <h2 className="title">🔍 Emoji Detective</h2>
+        <p className="subtitle">Look at the emojis and pick what they mean!</p>
 
         {phase === 'playing' && (
           <>
             <div className="status-bar">
-              <span className="lives">{livesDisplay.join(' ')}</span>
+              <span className="category">{puzzle.category}</span>
               <span className="score">⭐ {score}</span>
-              <span className="progress">{index + 1}/{shuffled.length}</span>
+              <span className="progress">{index + 1}/{puzzlesWithOptions.length}</span>
             </div>
-
-            <div className="category-badge">{puzzle.category}</div>
 
             <div className={`emoji-display ${shake ? 'shake' : ''}`}>
               {puzzle.emojis}
             </div>
 
             {feedback === 'correct' && (
-              <div className="feedback correct">✅ Correct! +{hintUsed ? 5 : 10} points!</div>
+              <div className="feedback correct">✅ Yes! That's right!</div>
             )}
             {feedback === 'wrong' && (
-              <div className="feedback wrong">❌ Not quite! Try again!</div>
+              <div className="feedback wrong">❌ Nope! Try again!</div>
             )}
-            {feedback === 'hint' && (
-              <div className="feedback hint">💡 Hint: {puzzle.hint}</div>
-            )}
-            {!feedback && hintUsed && (
-              <div className="hint-active">💡 {puzzle.hint}</div>
-            )}
+            {!feedback && <div className="feedback-placeholder" />}
 
-            <div className="input-row">
-              <input
-                ref={inputRef}
-                className="guess-input"
-                type="text"
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your answer..."
-                autoComplete="off"
-                autoCapitalize="off"
-              />
+            <div className="options-grid">
+              {puzzle.options.map(opt => (
+                <button
+                  key={opt}
+                  className={`option-btn ${opt === wrongAnswer ? 'wrong-pick' : ''}`}
+                  onClick={() => handleGuess(opt)}
+                  disabled={feedback !== null}
+                >
+                  {opt}
+                </button>
+              ))}
             </div>
-
-            <div className="button-row">
-              <button className="guess-btn" onClick={handleGuess} disabled={!input.trim()}>
-                🔍 Guess!
-              </button>
-              <button className="hint-btn" onClick={handleHint} disabled={hintUsed}>
-                💡 {hintUsed ? 'Hint used' : 'Hint'}
-              </button>
-            </div>
-
-            <div className="tip">Type what the emojis represent and press Guess!</div>
           </>
-        )}
-
-        {phase === 'gameover' && (
-          <div className="end-area">
-            <div className="end-icon">💔</div>
-            <h3 className="end-title">Out of lives!</h3>
-            <p className="end-text">The answer was: <strong>{puzzle.answer}</strong></p>
-            <div className="final-score">⭐ Score: {score}</div>
-            <div className="buttons-row">
-              <button className="action-btn" onClick={handleRestart}>🔄 Try Again</button>
-              <button className="secondary-btn" onClick={onClose}>🏠 Home</button>
-            </div>
-          </div>
         )}
 
         {phase === 'complete' && (
@@ -243,7 +222,7 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
           border-radius: 24px;
           padding: 28px 24px;
           width: 100%;
-          max-width: 480px;
+          max-width: 500px;
           max-height: 90vh;
           overflow-y: auto;
           color: white;
@@ -270,8 +249,15 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
         .title {
           text-align: center;
           font-size: 28px;
-          margin: 0 0 16px;
+          margin: 0 0 4px;
           text-shadow: 0 0 20px rgba(240,147,251,0.6);
+        }
+
+        .subtitle {
+          text-align: center;
+          font-size: 15px;
+          color: rgba(255,255,255,0.6);
+          margin: 0 0 16px;
         }
 
         .status-bar {
@@ -279,22 +265,19 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
           justify-content: space-between;
           align-items: center;
           margin-bottom: 14px;
-          font-size: 16px;
+          font-size: 14px;
         }
 
-        .lives { font-size: 20px; }
-        .score { font-weight: bold; color: gold; }
-        .progress { color: rgba(255,255,255,0.6); font-size: 14px; }
-
-        .category-badge {
-          display: inline-block;
+        .category {
           background: rgba(240,147,251,0.2);
           border: 1px solid rgba(240,147,251,0.4);
           border-radius: 20px;
-          padding: 4px 14px;
-          font-size: 14px;
-          margin-bottom: 20px;
+          padding: 3px 12px;
+          font-size: 13px;
         }
+
+        .score { font-weight: bold; color: gold; font-size: 16px; }
+        .progress { color: rgba(255,255,255,0.5); }
 
         .emoji-display {
           font-size: 52px;
@@ -302,9 +285,9 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
           padding: 20px;
           background: rgba(255,255,255,0.06);
           border-radius: 20px;
-          margin-bottom: 16px;
+          margin-bottom: 12px;
           letter-spacing: 8px;
-          min-height: 100px;
+          min-height: 96px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -327,10 +310,19 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
           text-align: center;
           font-size: 18px;
           font-weight: bold;
-          padding: 10px 16px;
+          padding: 8px 16px;
           border-radius: 12px;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
           animation: popIn 0.2s ease;
+          min-height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .feedback-placeholder {
+          min-height: 40px;
+          margin-bottom: 12px;
         }
 
         @keyframes popIn {
@@ -340,80 +332,37 @@ export default function EmojiDetectiveGame({ onClose }: EmojiDetectiveGameProps)
 
         .feedback.correct { background: rgba(76, 175, 80, 0.25); border: 1px solid #4caf50; }
         .feedback.wrong { background: rgba(244, 67, 54, 0.25); border: 1px solid #f44336; }
-        .feedback.hint { background: rgba(255, 193, 7, 0.2); border: 1px solid #ffc107; color: #ffd54f; }
 
-        .hint-active {
-          text-align: center;
+        .options-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+
+        .option-btn {
+          padding: 12px 8px;
           font-size: 15px;
-          color: #ffd54f;
-          background: rgba(255, 193, 7, 0.1);
-          border-radius: 10px;
-          padding: 8px 14px;
-          margin-bottom: 12px;
-        }
-
-        .input-row {
-          margin-bottom: 14px;
-        }
-
-        .guess-input {
-          width: 100%;
-          padding: 14px 16px;
-          font-size: 18px;
-          border-radius: 14px;
-          border: 2px solid rgba(255,255,255,0.2);
-          background: rgba(255,255,255,0.08);
-          color: white;
-          outline: none;
-          box-sizing: border-box;
-          transition: border-color 0.2s;
-        }
-
-        .guess-input::placeholder { color: rgba(255,255,255,0.35); }
-        .guess-input:focus { border-color: rgba(240,147,251,0.6); }
-
-        .button-row {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-
-        .guess-btn {
-          flex: 2;
-          padding: 14px;
-          font-size: 18px;
           font-weight: bold;
-          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+          background: rgba(255,255,255,0.1);
           color: white;
-          border: none;
-          border-radius: 14px;
-          cursor: pointer;
-          transition: transform 0.15s, opacity 0.15s;
-          box-shadow: 0 4px 16px rgba(240,93,108,0.4);
-        }
-
-        .guess-btn:hover:not(:disabled) { transform: translateY(-2px); }
-        .guess-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-        .hint-btn {
-          flex: 1;
-          padding: 14px;
-          font-size: 15px;
-          background: rgba(255, 193, 7, 0.15);
-          color: #ffd54f;
-          border: 2px solid rgba(255, 193, 7, 0.3);
+          border: 2px solid rgba(255,255,255,0.2);
           border-radius: 14px;
           cursor: pointer;
           transition: all 0.15s;
+          line-height: 1.3;
         }
 
-        .hint-btn:hover:not(:disabled) { background: rgba(255, 193, 7, 0.25); }
-        .hint-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .option-btn:hover:not(:disabled) {
+          background: rgba(240, 147, 251, 0.3);
+          border-color: rgba(240, 147, 251, 0.6);
+          transform: translateY(-2px);
+        }
 
-        .tip {
-          text-align: center;
-          font-size: 13px;
-          color: rgba(255,255,255,0.4);
+        .option-btn:disabled { cursor: not-allowed; opacity: 0.7; }
+
+        .option-btn.wrong-pick {
+          background: rgba(244, 67, 54, 0.3);
+          border-color: #f44336;
         }
 
         .end-area {

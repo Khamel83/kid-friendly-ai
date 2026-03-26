@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface SpaceExplorerGameProps {
   onClose: () => void;
@@ -10,17 +10,17 @@ const planets = [
     emoji: '🪨',
     color: '#b5b5b5',
     fact: 'Mercury is the smallest planet and closest to the Sun! A year there is only 88 Earth days.',
-    questions: [
-      {
-        text: 'Mercury is the _____ planet from the Sun.',
-        options: ['1st', '2nd', '3rd', '4th'],
-        answer: '1st',
-      },
-      {
-        text: 'What is 7 + 8? (fuel units needed to launch!)',
-        options: ['13', '14', '15', '16'],
-        answer: '15',
-      },
+    questionPool: [
+      { text: 'Mercury is the _____ planet from the Sun.', options: ['1st', '2nd', '3rd', '4th'], answer: '1st' },
+      { text: 'What is 7 + 8?', options: ['13', '14', '15', '16'], answer: '15' },
+      { text: 'Mercury is the _____ planet in size.', options: ['Biggest', 'Smallest', 'Hottest', 'Coldest'], answer: 'Smallest' },
+      { text: 'What is 4 × 3?', options: ['10', '11', '12', '14'], answer: '12' },
+      { text: 'How many Earth days is a year on Mercury?', options: ['30', '55', '88', '100'], answer: '88' },
+      { text: 'What is 5 + 9?', options: ['12', '13', '14', '15'], answer: '14' },
+      { text: 'Mercury has no _____ to protect it.', options: ['Rings', 'Moons', 'Atmosphere', 'Color'], answer: 'Atmosphere' },
+      { text: 'What is 20 - 7?', options: ['11', '12', '13', '14'], answer: '13' },
+      { text: 'Mercury is made mostly of _____.', options: ['Gas', 'Ice', 'Rock', 'Water'], answer: 'Rock' },
+      { text: 'What is 3 × 6?', options: ['15', '16', '18', '21'], answer: '18' },
     ],
   },
   {
@@ -28,17 +28,17 @@ const planets = [
     emoji: '🌕',
     color: '#e8c56e',
     fact: "Venus is the hottest planet — even hotter than Mercury! It spins backwards compared to most planets.",
-    questions: [
-      {
-        text: 'Venus is sometimes called Earth\'s ___.',
-        options: ['Twin', 'Enemy', 'Moon', 'Brother'],
-        answer: 'Twin',
-      },
-      {
-        text: 'What is 6 × 4? (fuel units needed!)',
-        options: ['20', '22', '24', '26'],
-        answer: '24',
-      },
+    questionPool: [
+      { text: "Venus is sometimes called Earth's ___.", options: ['Twin', 'Enemy', 'Moon', 'Brother'], answer: 'Twin' },
+      { text: 'What is 6 × 4?', options: ['20', '22', '24', '26'], answer: '24' },
+      { text: 'Venus is the _____ planet from the Sun.', options: ['1st', '2nd', '3rd', '4th'], answer: '2nd' },
+      { text: 'What is 30 + 15?', options: ['40', '45', '50', '55'], answer: '45' },
+      { text: 'Compared to other planets, Venus is the _____?', options: ['Coldest', 'Hottest', '2nd biggest', 'Fastest'], answer: 'Hottest' },
+      { text: 'What is 9 + 7?', options: ['14', '15', '16', '17'], answer: '16' },
+      { text: 'Venus spins _____ compared to most planets.', options: ['Faster', 'Backwards', 'Sideways', 'Slower'], answer: 'Backwards' },
+      { text: 'What is 50 - 18?', options: ['28', '30', '32', '34'], answer: '32' },
+      { text: 'Venus is covered in thick _____.', options: ['Water', 'Ice', 'Clouds', 'Sand'], answer: 'Clouds' },
+      { text: 'What is 7 × 3?', options: ['18', '19', '21', '24'], answer: '21' },
     ],
   },
   {
@@ -46,17 +46,17 @@ const planets = [
     emoji: '🌍',
     color: '#4fc3f7',
     fact: 'Earth is the only planet known to have life! It has one moon and is mostly covered in water.',
-    questions: [
-      {
-        text: 'How much of Earth is covered by water?',
-        options: ['30%', '50%', '70%', '90%'],
-        answer: '70%',
-      },
-      {
-        text: 'What is 12 × 5? (fuel units needed!)',
-        options: ['50', '55', '60', '65'],
-        answer: '60',
-      },
+    questionPool: [
+      { text: 'How much of Earth is covered by water?', options: ['30%', '50%', '70%', '90%'], answer: '70%' },
+      { text: 'What is 12 × 5?', options: ['50', '55', '60', '65'], answer: '60' },
+      { text: 'How many moons does Earth have?', options: ['0', '1', '2', '3'], answer: '1' },
+      { text: 'What is 100 - 37?', options: ['53', '63', '67', '73'], answer: '63' },
+      { text: 'Earth is the _____ planet from the Sun.', options: ['2nd', '3rd', '4th', '5th'], answer: '3rd' },
+      { text: 'What is 8 + 13?', options: ['19', '20', '21', '22'], answer: '21' },
+      { text: 'Earth is the only planet with _____.', options: ['Moons', 'Life', 'Clouds', 'Craters'], answer: 'Life' },
+      { text: 'What is 9 × 4?', options: ['32', '34', '36', '38'], answer: '36' },
+      { text: 'What is the name of Earth\'s moon?', options: ['Luna', 'Titan', 'Phobos', 'Io'], answer: 'Luna' },
+      { text: 'What is 77 - 29?', options: ['44', '46', '48', '50'], answer: '48' },
     ],
   },
   {
@@ -64,17 +64,17 @@ const planets = [
     emoji: '🔴',
     color: '#ef5350',
     fact: 'Mars is called the Red Planet! It has the biggest volcano in the solar system — Olympus Mons.',
-    questions: [
-      {
-        text: 'How many moons does Mars have?',
-        options: ['0', '1', '2', '4'],
-        answer: '2',
-      },
-      {
-        text: 'What is 9 × 9? (fuel units needed!)',
-        options: ['72', '81', '88', '90'],
-        answer: '81',
-      },
+    questionPool: [
+      { text: 'How many moons does Mars have?', options: ['0', '1', '2', '4'], answer: '2' },
+      { text: 'What is 9 × 9?', options: ['72', '81', '88', '90'], answer: '81' },
+      { text: 'Mars is known as the _____ Planet.', options: ['Blue', 'Green', 'Red', 'Gold'], answer: 'Red' },
+      { text: 'What is 8 × 7?', options: ['48', '54', '56', '64'], answer: '56' },
+      { text: 'Mars is the _____ planet from the Sun.', options: ['3rd', '4th', '5th', '6th'], answer: '4th' },
+      { text: 'What is 6 + 17?', options: ['21', '22', '23', '24'], answer: '23' },
+      { text: 'The biggest volcano in the solar system is on _____.', options: ['Earth', 'Venus', 'Mars', 'Jupiter'], answer: 'Mars' },
+      { text: 'What is 11 × 7?', options: ['66', '70', '77', '84'], answer: '77' },
+      { text: 'Mars has a thin _____ made mostly of CO2.', options: ['Ocean', 'Atmosphere', 'Ring', 'Moon'], answer: 'Atmosphere' },
+      { text: 'What is 90 ÷ 9?', options: ['8', '9', '10', '11'], answer: '10' },
     ],
   },
   {
@@ -82,17 +82,17 @@ const planets = [
     emoji: '🟠',
     color: '#ff8f00',
     fact: 'Jupiter is the biggest planet! Its Great Red Spot is a storm that has been raging for over 350 years.',
-    questions: [
-      {
-        text: 'Jupiter is the _____ planet from the Sun.',
-        options: ['4th', '5th', '6th', '7th'],
-        answer: '5th',
-      },
-      {
-        text: 'What is 11 × 11? (fuel units needed!)',
-        options: ['111', '121', '131', '141'],
-        answer: '121',
-      },
+    questionPool: [
+      { text: 'Jupiter is the _____ planet from the Sun.', options: ['4th', '5th', '6th', '7th'], answer: '5th' },
+      { text: 'What is 11 × 11?', options: ['111', '121', '131', '141'], answer: '121' },
+      { text: 'Jupiter is the _____ planet.', options: ['Smallest', 'Fastest', 'Biggest', 'Closest'], answer: 'Biggest' },
+      { text: 'What is 6 × 12?', options: ['60', '66', '72', '78'], answer: '72' },
+      { text: "Jupiter's Great Red Spot is a giant ___.", options: ['Ocean', 'Storm', 'Volcano', 'Desert'], answer: 'Storm' },
+      { text: 'What is 15 + 28?', options: ['40', '41', '43', '45'], answer: '43' },
+      { text: 'How many moons does Jupiter have? (roughly)', options: ['4', '20', '50', '95'], answer: '95' },
+      { text: 'What is 8 × 8?', options: ['56', '60', '64', '72'], answer: '64' },
+      { text: 'Jupiter is made mostly of _____.', options: ['Rock', 'Ice', 'Gas', 'Metal'], answer: 'Gas' },
+      { text: 'What is 120 ÷ 10?', options: ['10', '11', '12', '14'], answer: '12' },
     ],
   },
   {
@@ -100,17 +100,17 @@ const planets = [
     emoji: '🪐',
     color: '#fdd835',
     fact: "Saturn's rings are made of ice and rock! It has 146 known moons — more than any other planet.",
-    questions: [
-      {
-        text: "Saturn's rings are mostly made of ___.",
-        options: ['Gas', 'Ice & Rock', 'Lava', 'Dust'],
-        answer: 'Ice & Rock',
-      },
-      {
-        text: 'What is 144 ÷ 12? (fuel units needed!)',
-        options: ['10', '11', '12', '13'],
-        answer: '12',
-      },
+    questionPool: [
+      { text: "Saturn's rings are mostly made of ___.", options: ['Gas', 'Ice & Rock', 'Lava', 'Dust'], answer: 'Ice & Rock' },
+      { text: 'What is 144 ÷ 12?', options: ['10', '11', '12', '13'], answer: '12' },
+      { text: 'Saturn is the _____ planet from the Sun.', options: ['5th', '6th', '7th', '8th'], answer: '6th' },
+      { text: 'What is 7 × 9?', options: ['54', '56', '63', '72'], answer: '63' },
+      { text: 'Which planet has the most visible rings?', options: ['Jupiter', 'Uranus', 'Saturn', 'Neptune'], answer: 'Saturn' },
+      { text: 'What is 13 + 19?', options: ['28', '30', '32', '34'], answer: '32' },
+      { text: 'Saturn is also mostly made of _____.', options: ['Rock', 'Ice', 'Gas', 'Fire'], answer: 'Gas' },
+      { text: 'What is 9 × 8?', options: ['63', '70', '72', '81'], answer: '72' },
+      { text: 'How many moons does Saturn have?', options: ['12', '50', '80', '146'], answer: '146' },
+      { text: 'What is 200 - 143?', options: ['47', '55', '57', '63'], answer: '57' },
     ],
   },
   {
@@ -118,17 +118,17 @@ const planets = [
     emoji: '🩵',
     color: '#80deea',
     fact: "Uranus rotates on its side! It's so tilted that its poles take turns facing the Sun for 42 years each.",
-    questions: [
-      {
-        text: 'Uranus appears what color from space?',
-        options: ['Red', 'Yellow', 'Blue-green', 'Purple'],
-        answer: 'Blue-green',
-      },
-      {
-        text: 'What is 200 ÷ 4? (fuel units needed!)',
-        options: ['40', '50', '60', '70'],
-        answer: '50',
-      },
+    questionPool: [
+      { text: 'Uranus appears what color from space?', options: ['Red', 'Yellow', 'Blue-green', 'Purple'], answer: 'Blue-green' },
+      { text: 'What is 200 ÷ 4?', options: ['40', '50', '60', '70'], answer: '50' },
+      { text: 'Uranus is the _____ planet from the Sun.', options: ['5th', '6th', '7th', '8th'], answer: '7th' },
+      { text: 'What is 13 × 4?', options: ['42', '48', '52', '56'], answer: '52' },
+      { text: 'Uranus spins on its _____.', options: ['Top', 'Side', 'Bottom', 'Back'], answer: 'Side' },
+      { text: 'What is 6 × 11?', options: ['60', '64', '66', '70'], answer: '66' },
+      { text: 'Uranus is an _____ giant planet.', options: ['Fire', 'Gas', 'Ice', 'Rock'], answer: 'Ice' },
+      { text: 'What is 84 ÷ 7?', options: ['10', '11', '12', '14'], answer: '12' },
+      { text: 'How many moons does Uranus have?', options: ['5', '14', '27', '40'], answer: '27' },
+      { text: 'What is 17 + 35?', options: ['48', '50', '52', '54'], answer: '52' },
     ],
   },
   {
@@ -136,43 +136,52 @@ const planets = [
     emoji: '💙',
     color: '#3949ab',
     fact: 'Neptune has the strongest winds in the solar system — up to 2,100 km/h! It takes 165 years to orbit the Sun.',
-    questions: [
-      {
-        text: 'Neptune is the _____ planet from the Sun.',
-        options: ['6th', '7th', '8th', '9th'],
-        answer: '8th',
-      },
-      {
-        text: 'What is 7 × 8? (final fuel boost!)',
-        options: ['48', '54', '56', '64'],
-        answer: '56',
-      },
+    questionPool: [
+      { text: 'Neptune is the _____ planet from the Sun.', options: ['6th', '7th', '8th', '9th'], answer: '8th' },
+      { text: 'What is 7 × 8?', options: ['48', '54', '56', '64'], answer: '56' },
+      { text: 'Neptune is known for its powerful _____.', options: ['Volcanoes', 'Winds', 'Oceans', 'Storms'], answer: 'Winds' },
+      { text: 'What is 120 ÷ 8?', options: ['12', '14', '15', '16'], answer: '15' },
+      { text: 'How many years does Neptune take to orbit the Sun?', options: ['88', '100', '165', '250'], answer: '165' },
+      { text: 'What is 14 × 5?', options: ['60', '65', '70', '75'], answer: '70' },
+      { text: 'Neptune appears what color from space?', options: ['Red', 'Green', 'Blue', 'Yellow'], answer: 'Blue' },
+      { text: 'What is 96 ÷ 8?', options: ['10', '11', '12', '13'], answer: '12' },
+      { text: 'Neptune is the _____ planet from Earth.', options: ['Closest', 'Farthest', '2nd farthest', '3rd farthest'], answer: 'Farthest' },
+      { text: 'What is 25 + 48?', options: ['63', '70', '73', '78'], answer: '73' },
     ],
   },
 ];
 
+function pickTwo<T>(arr: T[]): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 2);
+}
+
 export default function SpaceExplorerGame({ onClose }: SpaceExplorerGameProps) {
+  const [gameKey, setGameKey] = useState(0);
+
+  const planetQuestions = useMemo(() =>
+    planets.map(p => ({ ...p, questions: pickTwo(p.questionPool) })),
+    [gameKey] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const [planetIndex, setPlanetIndex] = useState(0);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [fuel, setFuel] = useState(0);
   const [phase, setPhase] = useState<'question' | 'landing' | 'complete'>('question');
   const [feedback, setFeedback] = useState('');
   const [score, setScore] = useState(0);
-  const [wrongGuesses, setWrongGuesses] = useState(0);
 
-  const planet = planets[planetIndex];
+  const planet = planetQuestions[planetIndex];
   const question = planet.questions[questionIndex];
-  const totalPlanets = planets.length;
+  const totalPlanets = planetQuestions.length;
   const fuelTarget = 100;
 
   const handleAnswer = (option: string) => {
     if (option === question.answer) {
-      const fuelGain = 50;
-      const newFuel = Math.min(fuel + fuelGain, fuelTarget);
+      const newFuel = Math.min(fuel + 50, fuelTarget);
       setFuel(newFuel);
       setScore(s => s + 10);
       setFeedback('✅ Correct! Fuel loaded!');
-
       setTimeout(() => {
         setFeedback('');
         if (questionIndex + 1 < planet.questions.length) {
@@ -183,7 +192,6 @@ export default function SpaceExplorerGame({ onClose }: SpaceExplorerGameProps) {
         }
       }, 900);
     } else {
-      setWrongGuesses(w => w + 1);
       setFeedback('❌ Not quite! Try again!');
       setTimeout(() => setFeedback(''), 900);
     }
@@ -201,12 +209,12 @@ export default function SpaceExplorerGame({ onClose }: SpaceExplorerGameProps) {
   };
 
   const handleRestart = () => {
+    setGameKey(k => k + 1);
     setPlanetIndex(0);
     setQuestionIndex(0);
     setFuel(0);
     setPhase('question');
     setScore(0);
-    setWrongGuesses(0);
     setFeedback('');
   };
 
@@ -228,7 +236,7 @@ export default function SpaceExplorerGame({ onClose }: SpaceExplorerGameProps) {
 
         <h2 className="title">🚀 Space Explorer</h2>
         <div className="progress-row">
-          {planets.map((p, i) => (
+          {planetQuestions.map((p, i) => (
             <div key={i} className={`planet-dot ${i < planetIndex ? 'visited' : ''} ${i === planetIndex ? 'current' : ''}`}>
               {i < planetIndex ? '✅' : i === planetIndex ? p.emoji : '⬜'}
             </div>
@@ -269,7 +277,7 @@ export default function SpaceExplorerGame({ onClose }: SpaceExplorerGameProps) {
             <h3 className="landed-title">🎉 Landed on {planet.name}!</h3>
             <div className="planet-fact">🌟 {planet.fact}</div>
             <button className="next-btn" onClick={handleNextPlanet}>
-              {planetIndex + 1 >= totalPlanets ? '🏆 Finish Mission!' : `🚀 Next: ${planets[planetIndex + 1].name}`}
+              {planetIndex + 1 >= totalPlanets ? '🏆 Finish Mission!' : `🚀 Next: ${planetQuestions[planetIndex + 1].name}`}
             </button>
           </div>
         )}

@@ -4,6 +4,8 @@ import SimpleMathGame from '../components/SimpleMathGame';
 import SimpleAnimalQuiz from '../components/SimpleAnimalQuiz';
 import SimpleWordGame from '../components/SimpleWordGame';
 import SimpleMemoryGame from '../components/SimpleMemoryGame';
+import SpaceExplorerGame from '../components/SpaceExplorerGame';
+import EmojiDetectiveGame from '../components/EmojiDetectiveGame';
 
 interface Message {
   type: 'user' | 'ai';
@@ -19,6 +21,8 @@ export default function SimplePage() {
   const [showAnimal, setShowAnimal] = useState(false);
   const [showWord, setShowWord] = useState(false);
   const [showMemory, setShowMemory] = useState(false);
+  const [showSpace, setShowSpace] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -185,6 +189,16 @@ export default function SimplePage() {
         </div>
 
         <div className="games-grid">
+          <button className="game-card space" onClick={() => setShowSpace(true)}>
+            <div className="game-icon">🚀</div>
+            <div className="game-name">Space</div>
+          </button>
+
+          <button className="game-card emoji" onClick={() => setShowEmoji(true)}>
+            <div className="game-icon">🔍</div>
+            <div className="game-name">Emoji</div>
+          </button>
+
           <button className="game-card math" onClick={() => setShowMath(true)}>
             <div className="game-icon">🧮</div>
             <div className="game-name">Math</div>
@@ -248,6 +262,8 @@ export default function SimplePage() {
         {showAnimal && <SimpleAnimalQuiz onClose={() => setShowAnimal(false)} />}
         {showWord && <SimpleWordGame onClose={() => setShowWord(false)} />}
         {showMemory && <SimpleMemoryGame onClose={() => setShowMemory(false)} />}
+        {showSpace && <SpaceExplorerGame onClose={() => setShowSpace(false)} />}
+        {showEmoji && <EmojiDetectiveGame onClose={() => setShowEmoji(false)} />}
       </div>
 
       <style jsx>{`
