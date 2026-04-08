@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import SimpleMathGame from '../components/SimpleMathGame';
 import SimpleAnimalQuiz from '../components/SimpleAnimalQuiz';
@@ -6,6 +6,10 @@ import SimpleWordGame from '../components/SimpleWordGame';
 import SimpleMemoryGame from '../components/SimpleMemoryGame';
 import SpaceExplorerGame from '../components/SpaceExplorerGame';
 import EmojiDetectiveGame from '../components/EmojiDetectiveGame';
+import VoiceSelector from '../components/VoiceSelector';
+import { useServiceMode } from '../hooks/useServiceMode';
+import { streamChat } from '../utils/llmClient';
+import { synthesizeSpeech, LOCAL_VOICES, CLOUD_VOICES } from '../utils/ttsClient';
 
 interface Message {
   type: 'user' | 'ai';
@@ -15,7 +19,12 @@ interface Message {
 export default function SimplePage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState('');
+  const [selectedVoice, setSelectedVoice] = useState(LOCAL_VOICES[0].id);
+  const [isStreaming, setIsStreaming] = useState(false);
+
+  const { mode, checking } = useServiceMode();
 
   const [showMath, setShowMath] = useState(false);
   const [showAnimal, setShowAnimal] = useState(false);
@@ -28,6 +37,7 @@ export default function SimplePage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pendingTranscriptRef = useRef<string | null>(null);
   const isListeningRef = useRef<boolean>(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Initialize speech recognition once on mount
   useEffect(() => {
@@ -40,7 +50,6 @@ export default function SimplePage() {
         recognitionRef.current.lang = 'en-US';
 
         recognitionRef.current.onresult = (event: any) => {
-          // Accumulate all final results
           let transcript = '';
           for (let i = 0; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
@@ -58,11 +67,9 @@ export default function SimplePage() {
             setIsListening(false);
             setError('Please allow microphone access!');
           }
-          // Ignore no-speech errors while holding button
         };
 
         recognitionRef.current.onend = () => {
-          // Only process if we're no longer listening (button released)
           if (!isListeningRef.current) {
             setIsListening(false);
             if (pendingTranscriptRef.current) {
@@ -71,12 +78,10 @@ export default function SimplePage() {
               handleQuestion(transcript);
             }
           } else {
-            // Button still held — restart recognition (browser stops after ~60s)
             try { recognitionRef.current.start(); } catch (e) {}
           }
         };
       }
-
     }
   }, []);
 
@@ -89,6 +94,7 @@ export default function SimplePage() {
       setError('Voice not supported in this browser. Try Chrome!');
       return;
     }
+    if (isStreaming || isSpeaking) return;
 
     setError('');
     isListeningRef.current = true;
@@ -98,7 +104,6 @@ export default function SimplePage() {
     try {
       recognitionRef.current.start();
     } catch (err) {
-      console.error('Recognition start error:', err);
       isListeningRef.current = false;
       setIsListening(false);
       setError('Oops! Try again!');
@@ -113,68 +118,87 @@ export default function SimplePage() {
     } catch (err) {}
   };
 
+  const playTTSAudio = useCallback(async (text: string) => {
+    try {
+      setIsSpeaking(true);
+      const blob = await synthesizeSpeech({ text, voice: selectedVoice, mode });
+      const url = URL.createObjectURL(blob);
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+      audio.play();
+    } catch (err) {
+      console.error('TTS error:', err);
+      setIsSpeaking(false);
+    }
+  }, [selectedVoice, mode]);
+
   const handleQuestion = async (question: string) => {
     setMessages(prev => [...prev, { type: 'user', text: question }]);
     setError('');
+    setIsStreaming(true);
 
-    try {
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question,
-          conversationHistory: messages.slice(-4).map(m => ({
-            speaker: m.type,
-            text: m.text
-          }))
-        })
-      });
+    let aiResponse = '';
+    let aiMessageAdded = false;
 
-      if (!response.ok) throw new Error('Network error');
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-      let aiMessageAdded = false;
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              const data = line.substring(5).trim();
-              if (data === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.type === 'chunk' && parsed.content) {
-                  aiResponse += parsed.content;
-                  if (!aiMessageAdded) {
-                    setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
-                    aiMessageAdded = true;
-                  } else {
-                    setMessages(prev => {
-                      const updated = [...prev];
-                      updated[updated.length - 1] = { type: 'ai', text: aiResponse };
-                      return updated;
-                    });
-                  }
-                }
-              } catch (e) {}
-            }
+    await streamChat(
+      question,
+      messages.slice(-4).map(m => ({ speaker: m.type as 'user' | 'ai', text: m.text })),
+      mode,
+      {
+        onChunk: (content) => {
+          aiResponse += content;
+          if (!aiMessageAdded) {
+            setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
+            aiMessageAdded = true;
+          } else {
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { type: 'ai', text: aiResponse };
+              return updated;
+            });
           }
-        }
+        },
+        onDone: () => {
+          setIsStreaming(false);
+          // Play TTS with the completed response
+          if (aiResponse.trim()) {
+            playTTSAudio(aiResponse);
+          }
+        },
+        onError: (errorMessage) => {
+          setIsStreaming(false);
+          setError(errorMessage);
+        },
       }
-
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Something went wrong. Try again!');
-    }
+    );
   };
+
+  const handleStopSpeaking = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsSpeaking(false);
+  };
+
+  const modeLabel = checking ? '...' : mode === 'local' ? 'Local' : 'Cloud';
+  const modeColor = mode === 'local' ? '#4caf50' : '#ff9800';
 
   return (
     <>
@@ -186,6 +210,13 @@ export default function SimplePage() {
       <div className="app">
         <div className="header">
           <h1 className="title">🤖 AI Buddy</h1>
+          <div
+            className="mode-indicator"
+            style={{ color: modeColor, borderColor: modeColor }}
+            title={mode === 'local' ? 'Running on local Mac Mini' : 'Using free cloud AI'}
+          >
+            {modeLabel}
+          </div>
         </div>
 
         <div className="games-grid">
@@ -238,22 +269,36 @@ export default function SimplePage() {
                 <div className="message-text">{msg.text}</div>
               </div>
             ))}
+            {isStreaming && (
+              <div className="message ai">
+                <div className="message-label">Buddy</div>
+                <div className="message-text typing">thinking...</div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           {error && <div className="error">{error}</div>}
 
           <div className="controls">
+            <VoiceSelector
+              mode={mode}
+              selectedVoice={selectedVoice}
+              onVoiceChange={setSelectedVoice}
+            />
+          </div>
+
+          <div className="controls">
             <button
-              className={`talk-button ${isListening ? 'listening' : ''}`}
-              onMouseDown={startListening}
+              className={`talk-button ${isListening ? 'listening' : ''} ${isSpeaking ? 'speaking' : ''}`}
+              onMouseDown={isSpeaking ? handleStopSpeaking : startListening}
               onMouseUp={stopListening}
               onMouseLeave={stopListening}
-              onTouchStart={(e) => { e.preventDefault(); startListening(); }}
+              onTouchStart={(e) => { e.preventDefault(); isSpeaking ? handleStopSpeaking() : startListening(); }}
               onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
-              disabled={isListening}
+              disabled={isListening || isStreaming}
             >
-              {isListening ? '🎤 Listening...' : '🎤 Hold to Talk'}
+              {isSpeaking ? '🔊 Tap to Stop' : isStreaming ? '💭 Thinking...' : isListening ? '🎤 Listening...' : '🎤 Hold to Talk'}
             </button>
           </div>
         </div>
@@ -276,6 +321,7 @@ export default function SimplePage() {
         .header {
           text-align: center;
           margin-bottom: 24px;
+          position: relative;
         }
 
         .title {
@@ -283,6 +329,18 @@ export default function SimplePage() {
           color: white;
           margin: 0;
           text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .mode-indicator {
+          display: inline-block;
+          font-size: 12px;
+          font-weight: 600;
+          padding: 2px 8px;
+          border-radius: 8px;
+          border: 1px solid;
+          margin-top: 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
         }
 
         .games-grid {
@@ -402,6 +460,11 @@ export default function SimplePage() {
 
         .message.ai .message-text {
           background: #fce4ec;
+        }
+
+        .message-text.typing {
+          color: #999;
+          font-style: italic;
         }
 
         .error {

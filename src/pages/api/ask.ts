@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { systemPrompt } from '../../utils/aiPrompt';
+import { systemPrompt, cloudModeRestrictions } from '../../utils/aiPrompt';
 
 // Define a type for the messages in the conversation history
 interface HistoryMessage {
@@ -61,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // --- Format LLM messages with history ---
         const llmMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-          { role: 'system', content: systemPrompt }
+          { role: 'system', content: systemPrompt + cloudModeRestrictions }
         ];
 
         console.log('Conversation history:', optimizedHistory);
@@ -91,7 +91,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               'X-Title': 'Kid-Friendly AI Assistant'
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.0-flash-001',
+              model: process.env.OPENROUTER_MODEL || 'openrouter/free',
               messages: llmMessages,
               temperature: 0.7,
               max_tokens: 500,
