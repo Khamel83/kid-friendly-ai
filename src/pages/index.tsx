@@ -38,87 +38,50 @@ export default function SimplePage() {
   const pendingTranscriptRef = useRef<string | null>(null);
   const isListeningRef = useRef<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const processTranscriptRef = useRef<(text: string) => void>(() => {});
 
-  // Initialize speech recognition once on mount
+  // Keep processTranscript ref current
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        recognitionRef.current = new SpeechRecognition();
-        recognitionRef.current.continuous = true;
-        recognitionRef.current.interimResults = true;
-        recognitionRef.current.lang = 'en-US';
+    processTranscriptRef.current = (text: string) => {
+      setMessages(prev => [...prev, { type: 'user', text }]);
+      setError('');
+      setIsStreaming(true);
 
-        recognitionRef.current.onresult = (event: any) => {
-          let transcript = '';
-          for (let i = 0; i < event.results.length; i++) {
-            if (event.results[i].isFinal) {
-              transcript += event.results[i][0].transcript + ' ';
-            }
-          }
-          if (transcript.trim()) {
-            pendingTranscriptRef.current = transcript.trim();
-          }
-        };
+      let aiResponse = '';
+      let aiMessageAdded = false;
+      const history = messages.slice(-4).map(m => ({ speaker: m.type as 'user' | 'ai', text: m.text }));
 
-        recognitionRef.current.onerror = (event: any) => {
-          console.error('Speech recognition error:', event.error);
-          if (event.error === 'not-allowed') {
-            setIsListening(false);
-            setError('Please allow microphone access!');
-          }
-        };
-
-        recognitionRef.current.onend = () => {
-          if (!isListeningRef.current) {
-            setIsListening(false);
-            if (pendingTranscriptRef.current) {
-              const transcript = pendingTranscriptRef.current;
-              pendingTranscriptRef.current = null;
-              handleQuestion(transcript);
-            }
+      streamChat(text, history, mode, {
+        onChunk: (content) => {
+          aiResponse += content;
+          if (!aiMessageAdded) {
+            setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
+            aiMessageAdded = true;
           } else {
-            try { recognitionRef.current.start(); } catch (e) {}
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { type: 'ai', text: aiResponse };
+              return updated;
+            });
           }
-        };
-      }
-    }
-  }, []);
+        },
+        onDone: () => {
+          setIsStreaming(false);
+          if (aiResponse.trim()) {
+            playTTSAudioRef.current(aiResponse);
+          }
+        },
+        onError: (errorMessage) => {
+          setIsStreaming(false);
+          setError(errorMessage);
+        },
+      });
+    };
+  });
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const startListening = () => {
-    if (!recognitionRef.current) {
-      setError('Voice not supported in this browser. Try Chrome!');
-      return;
-    }
-    if (isStreaming || isSpeaking) return;
-
-    setError('');
-    isListeningRef.current = true;
-    setIsListening(true);
-    pendingTranscriptRef.current = null;
-
-    try {
-      recognitionRef.current.start();
-    } catch (err) {
-      isListeningRef.current = false;
-      setIsListening(false);
-      setError('Oops! Try again!');
-    }
-  };
-
-  const stopListening = () => {
-    if (!isListeningRef.current) return;
-    isListeningRef.current = false;
-    try {
-      recognitionRef.current?.stop();
-    } catch (err) {}
-  };
-
-  const playTTSAudio = useCallback(async (text: string) => {
+  const playTTSAudioRef = useRef<(text: string) => Promise<void>>(async () => {});
+  playTTSAudioRef.current = async (text: string) => {
     try {
       setIsSpeaking(true);
       const blob = await synthesizeSpeech({ text, voice: selectedVoice, mode });
@@ -146,47 +109,108 @@ export default function SimplePage() {
       console.error('TTS error:', err);
       setIsSpeaking(false);
     }
-  }, [selectedVoice, mode]);
+  };
 
-  const handleQuestion = async (question: string) => {
-    setMessages(prev => [...prev, { type: 'user', text: question }]);
-    setError('');
-    setIsStreaming(true);
-
-    let aiResponse = '';
-    let aiMessageAdded = false;
-
-    await streamChat(
-      question,
-      messages.slice(-4).map(m => ({ speaker: m.type as 'user' | 'ai', text: m.text })),
-      mode,
-      {
-        onChunk: (content) => {
-          aiResponse += content;
-          if (!aiMessageAdded) {
-            setMessages(prev => [...prev, { type: 'ai', text: aiResponse }]);
-            aiMessageAdded = true;
-          } else {
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { type: 'ai', text: aiResponse };
-              return updated;
-            });
-          }
-        },
-        onDone: () => {
-          setIsStreaming(false);
-          // Play TTS with the completed response
-          if (aiResponse.trim()) {
-            playTTSAudio(aiResponse);
-          }
-        },
-        onError: (errorMessage) => {
-          setIsStreaming(false);
-          setError(errorMessage);
-        },
+  const resetSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      if (isListeningRef.current) {
+        isListeningRef.current = false;
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        try { recognitionRef.current?.stop(); } catch (err) {}
       }
-    );
+    }, 5000);
+  }, []);
+
+  // Initialize speech recognition once on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'en-US';
+
+        recognitionRef.current.onresult = (event: any) => {
+          resetSilenceTimer();
+          let transcript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+              transcript += event.results[i][0].transcript + ' ';
+            }
+          }
+          if (transcript.trim()) {
+            pendingTranscriptRef.current = transcript.trim();
+          }
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          if (event.error === 'not-allowed') {
+            setIsListening(false);
+            setError('Please allow microphone access!');
+          }
+        };
+
+        recognitionRef.current.onend = () => {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          if (!isListeningRef.current) {
+            setIsListening(false);
+            if (pendingTranscriptRef.current) {
+              const transcript = pendingTranscriptRef.current;
+              pendingTranscriptRef.current = null;
+              processTranscriptRef.current(transcript);
+            }
+          } else {
+            try { recognitionRef.current.start(); } catch (e) {}
+          }
+        };
+      }
+    }
+  }, [resetSilenceTimer]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const startListening = () => {
+    if (!recognitionRef.current) {
+      setError('Voice not supported in this browser. Try Chrome!');
+      return;
+    }
+    if (isStreaming || isSpeaking) return;
+
+    setError('');
+    isListeningRef.current = true;
+    setIsListening(true);
+    pendingTranscriptRef.current = null;
+    resetSilenceTimer();
+
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      isListeningRef.current = false;
+      setIsListening(false);
+      setError('Oops! Try again!');
+    }
+  };
+
+  const stopListening = () => {
+    if (!isListeningRef.current) return;
+    isListeningRef.current = false;
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    try {
+      recognitionRef.current?.stop();
+    } catch (err) {}
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
   };
 
   const handleStopSpeaking = () => {
@@ -210,13 +234,15 @@ export default function SimplePage() {
       <div className="app">
         <div className="header">
           <h1 className="title">🤖 AI Buddy</h1>
-          <div
-            className="mode-indicator"
-            style={{ color: modeColor, borderColor: modeColor }}
-            title={mode === 'local' ? 'Running on local Mac Mini' : 'Using free cloud AI'}
-          >
-            {modeLabel}
-          </div>
+          {!checking && (
+            <div
+              className="mode-indicator"
+              style={{ color: modeColor, borderColor: modeColor }}
+              title={mode === 'local' ? 'Running on local Mac Mini' : 'Using free cloud AI'}
+            >
+              {modeLabel}
+            </div>
+          )}
         </div>
 
         <div className="games-grid">
@@ -256,6 +282,8 @@ export default function SimplePage() {
           </button>
         </div>
 
+        <VoiceSelector mode={mode} selectedVoice={selectedVoice} onVoiceChange={setSelectedVoice} />
+
         <div className="chat-container">
           <div className="messages">
             {messages.length === 0 && (
@@ -281,25 +309,22 @@ export default function SimplePage() {
           {error && <div className="error">{error}</div>}
 
           <div className="controls">
-            <VoiceSelector
-              mode={mode}
-              selectedVoice={selectedVoice}
-              onVoiceChange={setSelectedVoice}
-            />
-          </div>
-
-          <div className="controls">
-            <button
-              className={`talk-button ${isListening ? 'listening' : ''} ${isSpeaking ? 'speaking' : ''}`}
-              onMouseDown={isSpeaking ? handleStopSpeaking : startListening}
-              onMouseUp={stopListening}
-              onMouseLeave={stopListening}
-              onTouchStart={(e) => { e.preventDefault(); isSpeaking ? handleStopSpeaking() : startListening(); }}
-              onTouchEnd={(e) => { e.preventDefault(); stopListening(); }}
-              disabled={isListening || isStreaming}
-            >
-              {isSpeaking ? '🔊 Tap to Stop' : isStreaming ? '💭 Thinking...' : isListening ? '🎤 Listening...' : '🎤 Hold to Talk'}
-            </button>
+            {isSpeaking ? (
+              <button className="talk-button speaking" onClick={handleStopSpeaking}>
+                🔊 Tap to Stop
+              </button>
+            ) : isStreaming ? (
+              <button className="talk-button" disabled>
+                💭 Thinking...
+              </button>
+            ) : (
+              <button
+                className={`talk-button ${isListening ? 'listening' : ''}`}
+                onClick={toggleListening}
+              >
+                {isListening ? '⏹ Stop' : '🎤 Talk'}
+              </button>
+            )}
           </div>
         </div>
 

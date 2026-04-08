@@ -1,0 +1,16 @@
+[Unit]
+Description=Kid-Friendly AI Buddy
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/github/kid-friendly-ai
+Environment="NODE_ENV=production"
+Environment="PATH=/home/ubuntu/.npm-global/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
