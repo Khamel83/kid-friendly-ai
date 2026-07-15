@@ -1,0 +1,32 @@
+schema: homelab.project/v1
+project:
+  id: kid-friendly-ai
+  name: Kid Friendly Ai
+  repository: https://github.com/Khamel83/kid-friendly-ai
+  kind: service
+  lifecycle: development
+  owner: homelab
+monitoring:
+  state: standby
+runtime:
+  production:
+    host: unknown
+    managed_by: unknown
+    unit: kid-friendly-ai
+health:
+  source: homelab-api
+  checks: []
+observability:
+  event_sink: homelab-api:/observations
+  evidence_policy: sanitized
+dependencies:
+  required: []
+  optional: []
+secrets:
+  broker_consumer: kid-friendly-ai
+  references: []
+operations:
+  repair_ids: []
+docs:
+  index: README.md
+  operations: docs/OPERATIONS.md
