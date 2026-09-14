@@ -1,7 +1,16 @@
 <!-- janitor:begin:recent -->
-- Added Homelab project contract (`2a4dacede6d6e3fe5a82c72443e3f4c5da2313f2`).
-- Bootstrapped LLM-OVERVIEW files for 2026-05-10 (`eb416b6e4443dade801f1e27c96d61ccb5346574`).
-- Fixed click-to-talk toggle, voice card styles, and silence auto-stop (`30ead6982ac6019d14fe9563b913d09b1b4ef2de`).
-- Added dual-mode AI supporting local (Mac Mini) and free cloud (OpenRouter) (`f690640f9a42e846b4c79807096075149bb0a963`).
-- Improved Space & Emoji games with additional questions and enhanced UX (`a1552687a8449161e4cff26b1cbb65e713205585`).
+## Recent
+
+_Derived solely from the published commit summaries for source commit `8ab3fdf`; the published CONTEXT.md contained no content outside Janitor-managed blocks, so this summary reflects commit subjects only._
+
+- Homelab project contract added (chore).
+- LLM-OVERVIEW files bootstrapped (dated 2026-05-10).
+- Voice/UI fixes: click-to-talk toggle, voice card styles, and silence auto-stop.
+- Dual-mode AI work: local (Mac Mini) plus free cloud via OpenRouter.
+- Space and Emoji games received more questions and UX improvements; Space Explorer and Emoji Detective games were added with the stated goal of being "less boring."
+- TTS history shows churn across commits: ElevenLabs TTS with free-tier support, kid-friendly voice and usage tracking, sentence-streaming with the ElevenLabs flash model, deployment docs updates, then a commit removing TTS while adding icons and updating the prompt for age 7.
+- Other changes: animal game layout fixes and missing emojis, fixes for generic AI responses and audio echo issues, OOS (Operational Intelligence System) middleware integration, and a switch to OpenAI GPT-4.1-nano with an increased token limit.
+- Earlier baseline commit describes a production-ready kid-friendly AI for buddy.khamel.com.
+
+Ordering and current state are not fully verifiable from the supplied evidence, and several commits appear to supersede one another (notably TTS add/stream/remove).
 <!-- janitor:end:recent -->
