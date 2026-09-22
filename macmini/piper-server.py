@@ -5,7 +5,7 @@ Run on Mac Mini alongside Ollama to provide local text-to-speech
 with multiple voice options.
 
 Usage:
-    pip install piper-tts fastapi uvicorn
+    pip install -r requirements.txt
     python3 piper-server.py
 
 Voices are loaded from ./voices/ directory.
@@ -24,11 +24,17 @@ import json
 import io
 import wave
 from pathlib import Path
+try:
+    from parental_review import router as parental_review_router
+except ImportError:  # Support importing the service as macmini.piper_server.
+    from macmini.parental_review import router as parental_review_router
+
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Buddy Piper TTS")
+app.include_router(parental_review_router)
 
 app.add_middleware(
     CORSMiddleware,

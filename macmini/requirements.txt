@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+piper-tts
+langextract
