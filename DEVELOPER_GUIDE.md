@@ -702,6 +702,254 @@ module.exports = {
   // Other Next.js config
 };
 ```
+## 🍎 Apple/Container Development Workflow
+
+### Overview
+
+**Important:** This workflow is an **optional development and validation path** designed for Apple silicon Macs. It is **not** a replacement for the Docker Compose multi-service stack (which includes Redis and Nginx) or Linux/systemd production deployments. This workflow provides a lightweight way to validate the application in a containerized environment on macOS.
+
+### Prerequisites
+
+- **Hardware:** Apple silicon Mac (M1, M2, M3, M4, or later)
+- **OS:** macOS 26 or newer (verified minimum version)
+- **Docker Desktop:** Latest version with support for Apple silicon
+- **CLI Tools:** Standard Unix tools (curl, bash)
+
+### Installation and Service Setup
+
+#### 1. Obtain the Signed Apple/Container Release
+
+The Kid-Friendly AI project provides signed, pre-built container images optimized for Apple silicon. These are available through the project's GitHub releases:
+
+```bash
+# Download the latest signed Apple/container release
+# Navigate to: https://github.com/Khamel83/kid-friendly-ai/releases
+# Look for releases tagged with "apple-container" or the latest release with Apple/container support
+
+# Install or pull the pre-built image from the container registry
+docker pull ghcr.io/Khamel83/kid-friendly-ai:latest-arm64
+```
+
+#### 2. Start the Application Service
+
+There are two ways to run the application: as a one-off container or as a launchd service for persistent operation.
+
+**Option A: Interactive Container (Development)**
+
+```bash
+# Set up environment variables from your .env.local
+export OPENROUTER_API_KEY=your_key_here
+export OPENAI_API_KEY=your_key_here
+export NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Run the application container
+docker run -it \
+  -p 3000:3000 \
+  -e NODE_ENV=production \
+  -e PORT=3000 \
+  -e HOSTNAME=0.0.0.0 \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  -e OPENAI_API_KEY=$OPENAI_API_KEY \
+  -e NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+  ghcr.io/Khamel83/kid-friendly-ai:latest-arm64
+```
+
+**Option B: System Service (Persistent)**
+
+To run the application as a macOS system service using launchd, create a service definition file:
+
+```bash
+# Create launchd service directory
+mkdir -p "$HOME/Library/LaunchAgents"
+
+# Create the service definition
+cat > "$HOME/Library/LaunchAgents/com.khamel.buddy-app.plist" << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.khamel.buddy-app</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/docker</string>
+    <string>run</string>
+    <string>--rm</string>
+    <string>-p</string>
+    <string>3000:3000</string>
+    <string>-e</string>
+    <string>NODE_ENV=production</string>
+    <string>-e</string>
+    <string>PORT=3000</string>
+    <string>-e</string>
+    <string>HOSTNAME=0.0.0.0</string>
+    <string>-e</string>
+    <string>OPENROUTER_API_KEY</string>
+    <string>-e</string>
+    <string>OPENAI_API_KEY</string>
+    <string>-e</string>
+    <string>NEXT_PUBLIC_SITE_URL=http://localhost:3000</string>
+    <string>ghcr.io/Khamel83/kid-friendly-ai:latest-arm64</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Load from your environment, not embedded in the file -->
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardErrorPath</key>
+  <string>/var/log/buddy-app-error.log</string>
+  <key>StandardOutPath</key>
+  <string>/var/log/buddy-app.log</string>
+</dict>
+</plist>
+EOF
+
+# Load the service
+launchctl load "$HOME/Library/LaunchAgents/com.khamel.buddy-app.plist"
+
+# Verify it's running
+launchctl list | grep com.khamel.buddy-app
+```
+
+**Note:** Environment variables must be sourced from your development environment (e.g., `~/.zshrc` or `~/.bash_profile`). Do **not** embed API keys directly in the plist file or commit them to the repository.
+
+### Building the Application Image
+
+To build the `runner` target image locally:
+
+```bash
+# Build the runner target for Apple silicon
+docker build \
+  --platform linux/arm64 \
+  --target runner \
+  -t kid-friendly-ai:apple-local \
+  .
+```
+
+### Smoke Test: Focused Application Validation
+
+After starting the application, run the focused smoke test to verify core functionality:
+
+```bash
+# 1. Check application port (port 3000)
+curl -s http://localhost:3000 | head -20
+
+# 2. Health check endpoint (/api/health)
+# The health endpoint returns application status without requiring AI credentials
+curl -s http://localhost:3000/api/health | jq '.status'
+
+# Expected response: "healthy"
+
+# 3. AI-independent route check
+# Verify the main UI route loads (no AI call required for initial render)
+curl -s -H "Accept: application/json" http://localhost:3000/ | head -10
+
+# 4. Full smoke test script
+cat > /tmp/smoke-test.sh << 'TESTEOF'
+#!/bin/bash
+set -e
+
+BASE_URL="http://localhost:3000"
+
+echo "🔍 Running focused smoke test..."
+
+# Test 1: Port connectivity
+echo -n "✓ Port 3000 connectivity... "
+if curl -s -o /dev/null -w "%{http_code}" "$BASE_URL" | grep -q "200\|404"; then
+  echo "OK"
+else
+  echo "FAILED"
+  exit 1
+fi
+
+# Test 2: Health endpoint
+echo -n "✓ Health endpoint (/api/health)... "
+HEALTH=$(curl -s "$BASE_URL/api/health" | jq '.status' 2>/dev/null || echo "null")
+if [ "$HEALTH" == '"healthy"' ]; then
+  echo "OK (status: healthy)"
+else
+  echo "FAILED (status: $HEALTH)"
+  exit 1
+fi
+
+# Test 3: AI-independent route
+echo -n "✓ AI-independent route check... "
+if curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/health" | grep -q "200"; then
+  echo "OK"
+else
+  echo "FAILED"
+  exit 1
+fi
+
+echo ""
+echo "✅ All smoke tests passed!"
+TESTEOF
+
+chmod +x /tmp/smoke-test.sh
+/tmp/smoke-test.sh
+```
+
+### Environment Variable Handling
+
+Environment variables are loaded from your shell environment, not from committed files:
+
+```bash
+# ✅ CORRECT: Load from shell environment
+export OPENROUTER_API_KEY=$(cat ~/.config/openrouter-key)
+export OPENAI_API_KEY=$(cat ~/.config/openai-key)
+
+docker run -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+           -e OPENAI_API_KEY=$OPENAI_API_KEY \
+           ...
+
+# ❌ WRONG: Never embed keys in scripts or config files
+docker run -e OPENROUTER_API_KEY=sk-... \
+           -e OPENAI_API_KEY=sk-... \
+           ...
+```
+
+**Best Practice:** Store API keys in secure locations:
+- `~/.config/<service>-key` (for development)
+- System keychain integration
+- macOS Keychain via `security` command
+
+### Known Limitations
+
+This workflow has known limitations to be aware of:
+
+1. **Single-Service Only:** This workflow runs only the Next.js application container. The full Docker Compose lifecycle (including Redis for caching, Nginx for reverse proxy, Prometheus/Grafana for monitoring) is **not** covered.
+
+2. **No Redis Integration:** Caching features that depend on Redis are not available in this workflow. The application will operate with in-memory caching only.
+
+3. **No Nginx Reverse Proxy:** The application runs directly on port 3000. SSL termination and rate limiting via Nginx are not available.
+
+4. **Development/Validation Only:** This workflow is intended for local development and validation on Apple silicon. It is **not** a replacement for the Linux/systemd production deployment path for server environments.
+
+5. **No Monitoring Stack:** Prometheus and Grafana monitoring are not included in this workflow.
+
+### Stopping and Troubleshooting
+
+```bash
+# Stop the service
+launchctl unload "$HOME/Library/LaunchAgents/com.khamel.buddy-app.plist"
+
+# View logs
+tail -f /var/log/buddy-app.log
+tail -f /var/log/buddy-app-error.log
+
+# Verify container is running
+docker ps | grep kid-friendly-ai
+
+# Check application health
+curl -s http://localhost:3000/api/health | jq .
+
+# Stop running container directly
+docker stop $(docker ps -q -f ancestor=ghcr.io/Khamel83/kid-friendly-ai:latest-arm64)
+```
+
 
 ## 🐛 Troubleshooting Common Issues
 
