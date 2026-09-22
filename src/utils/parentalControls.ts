@@ -1,5 +1,9 @@
 import { ParentalSettings, UsageData, SettingsSection } from '../types/parental';
 import { DEFAULT_PARENTAL_SETTINGS } from '../types/parental';
+import {
+  ParentalReviewResult,
+  UNAVAILABLE_PARENTAL_REVIEW,
+} from '../types/parentalReview';
 
 const STORAGE_KEYS = {
   SETTINGS: 'kid-friendly-ai-parental-settings',
@@ -288,6 +292,29 @@ class ParentalControlsManager {
     return this.settings.privacySettings.personalizedAds;
   }
 
+  /**
+   * Explicitly request a server-side review from the parental-controls flow.
+   * Chat generation never calls this method.
+   */
+  async requestConversationReview(conversationSegment: string): Promise<ParentalReviewResult> {
+    try {
+      const response = await fetch('/api/parental-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationSegment }),
+      });
+
+      if (!response.ok) {
+        return UNAVAILABLE_PARENTAL_REVIEW;
+      }
+
+      const result: unknown = await response.json();
+      return isParentalReviewResult(result) ? result : UNAVAILABLE_PARENTAL_REVIEW;
+    } catch {
+      return UNAVAILABLE_PARENTAL_REVIEW;
+    }
+  }
+
   // Utility Methods
   resetToDefaults(): void {
     this.saveSettings(DEFAULT_PARENTAL_SETTINGS);
@@ -316,6 +343,20 @@ class ParentalControlsManager {
     };
     this.saveUsageData();
   }
+}
+
+function isParentalReviewResult(value: unknown): value is ParentalReviewResult {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const result = value as { status?: unknown; findings?: unknown; sourceExcerpts?: unknown };
+  return (
+    (result.status === 'disabled' || result.status === 'unavailable' || result.status === 'success') &&
+    Array.isArray(result.findings) &&
+    Array.isArray(result.sourceExcerpts) &&
+    result.sourceExcerpts.every(excerpt => typeof excerpt === 'string')
+  );
 }
 
 export const parentalControls = ParentalControlsManager.getInstance();
