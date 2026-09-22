@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:apple-container": "./deploy-docker.sh build-apple",
     "start": "next start",
     "lint": "next lint",
     "lint:fix": "next lint --fix",

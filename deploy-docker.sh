@@ -17,6 +17,7 @@ PROJECT_NAME="kid-friendly-ai"
 IMAGE_NAME="kid-friendly-ai"
 REGISTRY="${REGISTRY:-docker.io}"
 TAG="${TAG:-latest}"
+APPLE_IMAGE_TAG="${APPLE_IMAGE_TAG:-kid-friendly-ai:runner}"
 ENVIRONMENT="${ENVIRONMENT:-production}"
 
 # Logging functions
@@ -50,6 +51,23 @@ check_requirements() {
     log "Requirements check passed"
 }
 
+# Check Apple container requirements
+check_apple_container_requirements() {
+    log "Checking Apple container requirements..."
+
+    if ! command -v container &> /dev/null; then
+        error "Apple container CLI is not installed"
+        return 1
+    fi
+
+    if ! container system status > /dev/null 2>&1; then
+        error "Apple container system is not running"
+        return 1
+    fi
+
+    log "Apple container requirements check passed"
+}
+
 # Build Docker image
 build_image() {
     log "Building Docker image..."
@@ -61,6 +79,19 @@ build_image() {
         .
 
     log "Docker image built successfully"
+}
+
+# Build the existing runner target with Apple container
+build_apple_container_image() {
+    log "Building Apple container image ${APPLE_IMAGE_TAG}..."
+
+    container build \
+        --file Dockerfile \
+        --target runner \
+        --tag "${APPLE_IMAGE_TAG}" \
+        .
+
+    log "Apple container image built successfully"
 }
 
 # Push to registry (if configured)
@@ -193,7 +224,7 @@ show_help() {
     echo ""
     echo "Commands:"
     echo "  build                    Build Docker image"
-    echo "  push                     Push image to registry"
+    echo "  build-apple              Build the Dockerfile runner target with Apple container"
     echo "  deploy                   Deploy application"
     echo "  health                   Health check"
     echo "  status                   Show deployment status"
@@ -205,14 +236,22 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -e, --env ENV           Environment (development|production)"
-    echo "  -t, --tag TAG           Docker tag"
+    echo "  -t, --tag TAG           Docker or Apple container image tag (default: latest for production, dev for development)"
+    echo "                          For build-apple: defaults to 'kid-friendly-ai:runner' if not specified"
     echo "  -r, --registry REGISTRY Docker registry"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 deploy -e production"
-    echo "  $0 build -t v1.0.0"
-    echo "  $0 logs -e production"
+    echo "  $0 build-apple                      Build Apple container image with default tag"
+    echo "  $0 build-apple -t myapp:v1.0        Build Apple container image with custom tag"
+    echo "  $0 deploy -e production             Deploy to production"
+    echo "  $0 build -t v1.0.0                  Build Docker image with custom tag"
+    echo "  $0 logs                             Show application logs"
+    echo ""
+    echo "Default Configuration:"
+    echo "  Apple Container Image Tag: kid-friendly-ai:runner"
+    echo "  Docker Image Tag: latest (production) or dev (development)"
+    echo ""
 }
 
 # Main function
@@ -228,6 +267,7 @@ main() {
                 ;;
             -t|--tag)
                 TAG="$2"
+                APPLE_IMAGE_TAG="$2"
                 shift 2
                 ;;
             -r|--registry)
@@ -256,6 +296,10 @@ main() {
         build)
             check_requirements
             build_image
+            ;;
+        build-apple)
+            check_apple_container_requirements
+            build_apple_container_image
             ;;
         push)
             check_requirements

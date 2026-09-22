@@ -20,6 +20,25 @@ The Docker deployment provides a production-ready, scalable alternative to Verce
 - SSL certificates (or use Let's Encrypt)
 - API keys for OpenRouter and OpenAI
 
+
+### Optional Apple container image
+
+On macOS with Apple’s `container` CLI installed and its system running, build the existing production runner image without Docker Compose:
+
+```bash
+./deploy-docker.sh build-apple
+# or: npm run build:apple-container
+```
+
+The deterministic default image tag is `kid-friendly-ai:runner`. Override it with `APPLE_IMAGE_TAG` or the shared `--tag` option:
+
+```bash
+APPLE_IMAGE_TAG=kid-friendly-ai:runner-local ./deploy-docker.sh build-apple
+./deploy-docker.sh build-apple --tag kid-friendly-ai:runner-local
+```
+
+The command checks the Apple container CLI and system before running `container build`. It builds `Dockerfile` with the `runner` target and the repository root as context; the resulting image retains the Dockerfile’s production contents and port 3000.
+
 ## Quick Start
 
 ### Local Development
