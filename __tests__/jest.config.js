@@ -7,6 +7,7 @@ const createJestConfig = nextJest({
 
 // Add any custom config to be passed to Jest
 const customJestConfig = {
+  rootDir: '..',
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.ts'],
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: ['<rootDir>/.next/', '<rootDir>/node_modules/'],
@@ -16,7 +17,7 @@ const customJestConfig = {
     '!src/pages/_app.tsx',
     '!src/pages/_document.tsx',
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testMatch: [

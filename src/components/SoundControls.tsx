@@ -21,6 +21,8 @@ import {
   SoundLibrary,
   SoundEffectConfig
 } from '../types/sound';
+import ReviewPanel from './ReviewPanel';
+import { ReviewFinding, ReviewPanelState, ReviewResult } from '../types/review';
 
 interface SoundControlsProps {
   className?: string;
@@ -28,9 +30,14 @@ interface SoundControlsProps {
   showLibrary?: boolean;
   showAccessibility?: boolean;
   showParentalControls?: boolean;
+  reviewState?: ReviewPanelState;
+  reviewFindings?: ReviewFinding[];
+  reviewResult?: ReviewResult | null;
+  reviewUnavailableMessage?: string;
   onVolumeChange?: (volume: number) => void;
   onMuteToggle?: (muted: boolean) => void;
 }
+
 
 interface VolumeSliderProps {
   label: string;
@@ -201,7 +208,7 @@ const SoundPreview: React.FC<SoundPreviewProps> = ({
         <button
           className={`preview-play-button ${isPlaying ? 'playing' : ''}`}
           onClick={onPlay}
-          aria-label={`Play ${sound.name}`}
+          aria-label={isPlaying ? `Stop ${sound.name}` : `Play ${sound.name}`}
         >
           {isPlaying ? '⏹️' : '▶️'}
         </button>
@@ -222,6 +229,10 @@ const SoundControls: React.FC<SoundControlsProps> = ({
   showLibrary = false,
   showAccessibility = false,
   showParentalControls = false,
+  reviewState,
+  reviewFindings,
+  reviewResult,
+  reviewUnavailableMessage,
   onVolumeChange,
   onMuteToggle
 }) => {
@@ -358,6 +369,8 @@ const SoundControls: React.FC<SoundControlsProps> = ({
   if (!state) {
     return <div className="sound-controls loading">Loading sound controls...</div>;
   }
+  const resolvedReviewState = reviewState ?? reviewResult?.state ?? 'disabled';
+  const resolvedReviewFindings = reviewFindings ?? reviewResult?.findings ?? [];
 
   const categories: SoundEffectCategory[] = [
     'ui', 'game', 'educational', 'music', 'ambient',
@@ -566,6 +579,13 @@ const SoundControls: React.FC<SoundControlsProps> = ({
               </div>
             </div>
           </div>
+        )}
+        {!compact && showParentalControls && activeTab === 'parental' && (
+          <ReviewPanel
+            state={resolvedReviewState}
+            findings={resolvedReviewFindings}
+            unavailableMessage={reviewUnavailableMessage ?? reviewResult?.unavailableMessage}
+          />
         )}
       </div>
 
