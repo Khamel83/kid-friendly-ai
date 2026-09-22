@@ -160,6 +160,10 @@ This version includes major improvements over the original:
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
 
+Parental-review extraction is disabled by default. To run the local Ollama
+evaluation before enabling it, follow
+[the parental-review evaluation guide](docs/PARENTAL_REVIEW_EVALUATION.md).
+
 ## 🔧 What Makes It Special
 
 ### Designed for Kids

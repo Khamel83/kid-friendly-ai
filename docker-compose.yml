@@ -27,6 +27,10 @@ services:
       - NEXT_PUBLIC_ENABLE_SOUND_EFFECTS=${NEXT_PUBLIC_ENABLE_SOUND_EFFECTS:-true}
       - NEXT_PUBLIC_ENABLE_PATTERN_PUZZLE=${NEXT_PUBLIC_ENABLE_PATTERN_PUZZLE:-true}
       - NEXT_PUBLIC_ENABLE_ANIMAL_QUIZ=${NEXT_PUBLIC_ENABLE_ANIMAL_QUIZ:-true}
+      # Parental-review extraction stays opt-in until evaluation is reviewed
+      - PARENTAL_REVIEW_EXTRACTION_ENABLED=${PARENTAL_REVIEW_EXTRACTION_ENABLED:-false}
+      - PARENTAL_REVIEW_MODEL=${PARENTAL_REVIEW_MODEL:-gemma4:e4b}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://macmini.local:11434}
       # AI configuration
       - DEFAULT_AI_MODEL=${DEFAULT_AI_MODEL:-google/gemini-2.5-flash-lite}
       - MAX_TOKENS=${MAX_TOKENS:-500}

@@ -15,6 +15,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --watchAll=false",
+    "evaluate:parental-review": "node scripts/parental-review-evaluation.js",
     "e2e": "playwright test",
     "e2e:ci": "playwright test --headed",
     "e2e:ui": "playwright test --ui",
