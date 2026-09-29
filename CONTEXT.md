@@ -1,3 +1,7 @@
+## Recovery ownership
+
+OCI is Buddy's active host. Homelab is its recovery host under the Homelab OCI application recovery contract. A Git SHA does not identify the running app when the deployment checkout has unpublished edits. A clean Homelab rebuild is a candidate until source parity, private health, scoped credentials, an operation, fencing, route, and return are independently verified. The inspected server API routes have no durable server state; browser preferences are client local storage.
+
 <!-- janitor:begin:recent -->
 ## Recent Changes
 
