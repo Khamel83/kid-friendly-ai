@@ -104,7 +104,7 @@ function checkApi(): boolean {
   const hasOpenRouterKey = process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== '';
   const hasOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== '';
 
-  return hasOpenRouterKey || hasOpenAIKey;
+  return Boolean(hasOpenRouterKey || hasOpenAIKey);
 }
 
 function checkMemory(): boolean {
