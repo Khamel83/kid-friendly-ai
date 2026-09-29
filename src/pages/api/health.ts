@@ -137,4 +137,4 @@ function getCpuMetrics() {
   return {
     usage: Math.round((cpuUsage.user + cpuUsage.system) / 1000000), // Convert to seconds
   };
-} 
+}

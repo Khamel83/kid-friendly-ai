@@ -56,6 +56,8 @@ fi
 
 home_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$base/")"
 health_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$base/api/health")"
+# The JavaScript template literal is intentionally single-quoted for the shell.
+# shellcheck disable=SC2016
 health_checks="$(curl --silent --max-time 5 "$base/api/health" | node -e '
   let body = "";
   process.stdin.on("data", chunk => body += chunk);
