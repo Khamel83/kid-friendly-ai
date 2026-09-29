@@ -66,6 +66,8 @@ export function useServiceMode(): ServiceModeState {
       const isAvailable = await checkMacMini();
       if (isAvailable) {
         setMode('local');
+      } else {
+        setMode('cloud');
       }
     }, CHECK_INTERVAL);
 

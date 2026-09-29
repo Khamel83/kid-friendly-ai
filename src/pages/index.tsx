@@ -40,6 +40,8 @@ export default function SimplePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const processTranscriptRef = useRef<(text: string) => void>(() => {});
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
 
   // Keep processTranscript ref current
   useEffect(() => {
@@ -50,7 +52,7 @@ export default function SimplePage() {
 
       let aiResponse = '';
       let aiMessageAdded = false;
-      const history = messages.slice(-4).map(m => ({ speaker: m.type as 'user' | 'ai', text: m.text }));
+      const history = messagesRef.current.slice(-4).map(m => ({ speaker: m.type, text: m.text }));
 
       streamChat(text, history, mode, {
         onChunk: (content) => {

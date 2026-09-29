@@ -1,4 +1,4 @@
-import { systemPrompt, cloudModeRestrictions } from './aiPrompt';
+import { systemPrompt } from './aiPrompt';
 
 const MACMINI_OLLAMA_URL = 'http://macmini.local:11434';
 const LOCAL_MODEL = 'gemma4:e4b';
@@ -121,6 +121,26 @@ async function parseSSEStream(
 
   const decoder = new TextDecoder();
   let buffer = '';
+  let completed = false;
+
+  const processLine = (line: string): boolean => {
+    if (!line.startsWith('data:')) return false;
+    const data = line.substring(5).trim();
+    if (data === '[DONE]') return true;
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed.type === 'error') {
+        callbacks.onError(parsed.content || 'Buddy could not finish the response');
+        completed = true;
+        return true;
+      }
+      const content = parsed.choices?.[0]?.delta?.content || parsed.content || '';
+      if (content && parsed.type !== 'done') callbacks.onChunk(content);
+      return parsed.type === 'done';
+    } catch {
+      return false;
+    }
+  };
 
   try {
     while (true) {
@@ -132,32 +152,15 @@ async function parseSSEStream(
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('data:')) {
-          const data = line.substring(5).trim();
-          if (data === '[DONE]') {
-            callbacks.onDone();
-            return;
-          }
-          try {
-            const parsed = JSON.parse(data);
-            // Handle both Ollama format and Vercel /api/ask format
-            const content = parsed.choices?.[0]?.delta?.content
-              || parsed.content
-              || '';
-            if (content) {
-              callbacks.onChunk(content);
-            }
-            if (parsed.type === 'done') {
-              callbacks.onDone();
-              return;
-            }
-          } catch {
-            // Skip unparseable chunks
-          }
+        if (processLine(line)) {
+          if (!completed) callbacks.onDone();
+          return;
         }
       }
     }
-    callbacks.onDone();
+    buffer += decoder.decode();
+    if (buffer && processLine(buffer) && completed) return;
+    if (!completed) callbacks.onDone();
   } catch (err) {
     callbacks.onError('Stream interrupted');
   }
