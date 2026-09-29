@@ -1,7 +1,8 @@
 <!-- janitor:begin:todo -->
 # Current work
 
-- [ ] Merge the reviewed source reconciliation, then compare its exact release to the protected OCI running artifact before any active deployment. The OCI patch was preserved by file hash and reviewed: keep cloud-mode restrictions and the existing local/TTS controls; reject its nonexistent `/api/check-local` call, unbuffered SSE parsing, and extra CSS brace. The clean release repairs SSE error handling, current conversation history, and local-to-cloud fallback without resetting `/home/ubuntu/github/kid-friendly-ai`.
+- [x] Reconcile the protected OCI app edits in reviewed source without resetting the active checkout: [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head review and Node 18/20 CI. The keyless exact-source Homelab drill passed home 200, memory=true, and invalid ask 400; health 503 reflects deliberately absent provider credentials. See [HANDOFF.md](HANDOFF.md).
+- [ ] Compare the exact reviewed release to the OCI running artifact and preserve the staged/unstaged patch before any active deployment. A Git HEAD alone is not parity evidence.
 - [ ] Deploy and verify the reviewed `/api/health` memory calculation fix on the active app after source parity is resolved. The live OCI endpoint still returns 503; the database and Redis checks are placeholders, not dependency proof.
 - [ ] Declare scoped provider credentials on Homelab without copying or printing the OCI secret. Then prove a private, safe representative response with an explicit no-spend or bounded-spend decision.
 - [ ] Install the reviewed release as an inactive private Homelab service, then prove route fencing, client path, rollback, and return under the [Homelab recovery contract](https://github.com/Khamel83/homelab/blob/main/docs/operations/OCI_HOMELAB_RECOVERY_CONTRACT.md).
