@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { getHeapStatistics } from 'v8';
 
 interface HealthResponse {
   status: 'healthy' | 'unhealthy';
@@ -108,8 +109,9 @@ function checkApi(): boolean {
 
 function checkMemory(): boolean {
   const memoryUsage = process.memoryUsage();
-  const memoryPercentage = (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
-  return memoryPercentage < 90; // Alert if memory usage is above 90%
+  const heapLimit = getHeapStatistics().heap_size_limit;
+  // heapTotal is allocated heap, not the capacity available to V8.
+  return heapLimit > 0 && (memoryUsage.heapUsed / heapLimit) < 0.9;
 }
 
 function checkCpu(): boolean {
@@ -120,12 +122,12 @@ function checkCpu(): boolean {
 
 function getMemoryMetrics() {
   const memoryUsage = process.memoryUsage();
-  const systemMemory = require('os').totalmem();
+  const heapLimit = getHeapStatistics().heap_size_limit;
 
   return {
     used: memoryUsage.heapUsed,
-    total: memoryUsage.heapTotal,
-    percentage: Math.round((memoryUsage.heapUsed / memoryUsage.heapTotal) * 100),
+    total: heapLimit,
+    percentage: heapLimit > 0 ? Math.round((memoryUsage.heapUsed / heapLimit) * 100) : 100,
   };
 }
 

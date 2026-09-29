@@ -56,9 +56,17 @@ fi
 
 home_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$base/")"
 health_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 "$base/api/health")"
+health_checks="$(curl --silent --max-time 5 "$base/api/health" | node -e '
+  let body = "";
+  process.stdin.on("data", chunk => body += chunk);
+  process.stdin.on("end", () => {
+    const checks = JSON.parse(body).checks;
+    process.stdout.write(`memory=${checks.memory} api=${checks.api}`);
+  });
+')"
 invalid_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
   --header 'Content-Type: application/json' --data '{"question":""}' "$base/api/ask")"
-printf 'source=%s bind=127.0.0.1 home=%s health=%s invalid_ask=%s provider_request=none\n' \
+printf 'source=%s bind=127.0.0.1 home=%s health=%s %s invalid_ask=%s provider_request=none\n' \
   "$(git rev-parse --short HEAD 2>/dev/null || echo archive)" \
-  "$home_status" "$health_status" "$invalid_status"
+  "$home_status" "$health_status" "$health_checks" "$invalid_status"
 [[ "$home_status" == 200 && "$invalid_status" == 400 ]]
