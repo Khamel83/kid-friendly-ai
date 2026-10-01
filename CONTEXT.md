@@ -7,16 +7,11 @@ The 2026-09-29 source reconciliation keeps the child-facing cloud restrictions a
 A keyless, disposable Homelab build/probe proves rebuild and bounded input rejection only. Its health status can correctly be 503 when no provider key is present. Keep exact source, active runtime, private receipt, and downstream answer as separate evidence gates; see `HANDOFF.md` for current commit and runtime facts.
 
 <!-- janitor:begin:recent -->
-## Recent Changes
+## Recent verified state
 
-- 2c836efc: Merge pull request #6 from Khamel83/janitor/docs-8ab3fdf98b27958119d6cfa0f02a2b4633a48c79
-- 2a4daced: chore: add Homelab project contract
-- eb416b6e: chore: bootstrap LLM-OVERVIEW files 2026-05-10
-- 30ead698: fix: click-to-talk toggle + voice card styles + silence auto-stop
-- f690640f: feat: add dual-mode AI — local (Mac Mini) + free cloud (OpenRouter)
-- a1552687: feat: improve Space & Emoji games with more questions and better UX
-- a06c0ed5: Merge pull request #2 from Khamel83/claude/improve-game-ideas-commZ
-- 064f923e: Add Space Explorer and Emoji Detective games to make it less boring
-- 941f9bbe: feat: remove TTS, add icons, update prompt for age 7
-- 49ad0a52: feat: sentence-streaming TTS with ElevenLabs flash model
+- At source commit `8f66a6609dbac0b75ce47d30f55241270e55cfb6`, the repository documents Buddy as active on OCI with Homelab designated as its recovery host under the Homelab OCI application recovery contract.
+- Source reconciliation completed in `16c6f1edc6c6e69d85e769708eafc7f7f491b8be` and was merged in `cab8cfb283bef7d8d1bfbff93c8fb98e020fd77b`. It retained the child-facing cloud restrictions and existing local/TTS controls from reviewed main while separately identifying unpublished OCI edits that used an untracked `/api/check-local` route, mishandled partial SSE chunks, and contained an extra CSS brace. Those private edits are not evidence of a release or runtime parity.
+- A reviewed keyless Homelab recovery drill is recorded in `c95f0e15a3925a029e9068273b15c10b97f11504` and merged in `aedce674773cc0cac4570b1f513ae231a27529d1`. It proves rebuild and bounded input rejection only; a 503 health result without a provider key is consistent with that probe and is not proof of application parity.
+- The reviewed main stream parser buffers partial SSE lines, and the prior health implementation measures usage against the V8 heap limit (`1bc40fa13cdaf7ec4cf7b518bc6250fff7dc6279`).
+- Exact source, active runtime, private recovery receipt, scoped credentials, operational/fencing/route/return checks, and downstream behavior remain separate verification gates. `HANDOFF.md` is the current authority for those facts.
 <!-- janitor:end:recent -->
