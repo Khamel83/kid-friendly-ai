@@ -81,9 +81,11 @@ from buddy_release_state import (
     create_transaction,
     current_public_image,
     dropin_content,
+    environment_file_identity,
     extract_systemd_paths,
     load_receipt,
     parse_environment,
+    parse_environment_files,
     parse_exec_start,
     parse_main_pid,
     parse_public_mode,
@@ -99,6 +101,7 @@ from buddy_release_state import (
     read_service_identity,
     read_tx_image,
     receipt_path_for,
+    required_environment_file,
     scrub_for_receipt,
     validate_public_file_image,
     validate_receipt_name,
@@ -441,14 +444,14 @@ def _rollback_loaded_receipt(
     if current_identity.get("WorkingDirectory") not in allowed_wd:
         raise ReleaseError("buddy.service WorkingDirectory changed outside this transaction")
     allowed_envfiles = {
-        tuple(prior_identity.get("EnvironmentFiles", [])),
-        (str(config.runtime_env),),
+        environment_file_identity(prior_identity.get("EnvironmentFiles", [])),
+        environment_file_identity([required_environment_file(config.runtime_env)]),
     }
     allowed_dropins = {
         tuple(prior_identity.get("DropInPaths", [])),
         (str(config.dropin),),
     }
-    if tuple(current_identity.get("EnvironmentFiles", [])) not in allowed_envfiles:
+    if environment_file_identity(current_identity.get("EnvironmentFiles", [])) not in allowed_envfiles:
         raise ReleaseError("buddy.service EnvironmentFiles changed outside this transaction")
     if tuple(current_identity.get("DropInPaths", [])) not in allowed_dropins:
         raise ReleaseError("buddy.service DropInPaths changed outside this transaction")

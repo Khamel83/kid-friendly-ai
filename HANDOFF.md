@@ -1,5 +1,14 @@
 # Current checkpoint — 2026-10-02
 
+Latest correction: systemd255 multiline `EnvironmentFiles` now retains
+required/optional flags; unsupported or unannotated entries refuse. Installed
+identity requires exactly the mandatory runtime file, and rollback preserves
+flags after receipt JSON round-trip. The actual empty prior Buddy baseline is
+unchanged. All 32 release tests and compilation pass. Next: independent final
+review, publish the new PR25 head, require trusted PASS and both Node CI jobs,
+then use only the guarded OCI prepare/install path. The active dirty checkout
+and native unit remain protected; no OCI prepare/install has run.
+
 **Source:** The parent fetched origin and independently verified default `main`
 at `b99eb89680419876345d2d76131e453202455b17` again before publishing the
 module split. The isolated branch preserves the dirty Mac and OCI checkouts.

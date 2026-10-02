@@ -1,6 +1,12 @@
 <!-- janitor:begin:todo -->
 # Current work
 
+- [x] Fix the confirmed systemd255 environment-file identity gap: parse
+  annotated multiline `EnvironmentFiles`, retain required/optional flags,
+  require exactly the mandatory Buddy runtime file after install, and retain
+  flags across receipt serialization and rollback checks. Local evidence:
+  32 release tests and Python compilation pass. Deployment remains open.
+
 - [x] Reconcile the protected OCI app edits in reviewed source without resetting the active checkout: [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head review and Node 18/20 CI. The keyless exact-source Homelab drill passed home 200, memory=true, and invalid ask 400; health 503 reflects deliberately absent provider credentials. See [HANDOFF.md](HANDOFF.md).
 - [x] Revise the Buddy-only OCI release helper after parent review found the prior source not deployable. `ops/buddy_oci_release.py` now uses fixed Buddy paths/service/user/loopback, root guard plus `/var/lib/buddy/release-state/lock`, lexical trust checks, non-login `sudo -n -H -u ubuntu env -i` subprocesses with bounded process-group timeout cleanup, reviewed-source keyless probe enforcement, source/build/probe manifests with final post-probe source CAS, CAS-before-mutation checks, private beforeimage transactions with bounded metadata validation, native unit exact-mode `0600`/`0644` validation before intent, actual `RestartUSec` and exact `FragmentPath` identity checks, old 503/memory=false baseline acceptance, explicit disk rollback, and fail-closed rollback failure receipts. The privileged operator source is split across `ops/buddy_oci_release.py`, `ops/buddy_release_primitives.py`, and `ops/buddy_release_state.py` so trusted review can read each file within its per-file budget. Local evidence on 2026-10-02: `python3 -m unittest -v ops/test_buddy_oci_release.py` passed 28 tests; `python3 -m py_compile ops/buddy_oci_release.py ops/buddy_release_primitives.py ops/buddy_release_state.py ops/test_buddy_oci_release.py` passed; `python3 ops/buddy_oci_release.py --help` and `python3 ops/buddy_oci_release.py install --help` passed; `bash -n ops/recovery-probe.sh` passed.
 - [ ] Obtain trusted final-head review and merge before OCI use. Local 28 focused tests pass; independent review, trusted review, deployment, and live-service proof remain open.

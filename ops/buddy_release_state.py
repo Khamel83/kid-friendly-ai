@@ -53,11 +53,32 @@ def dropin_content(release_dir: Path, runtime_env: Path) -> bytes:
 
 def parse_systemctl_show(raw: str) -> dict[str, str]:
     values: dict[str, str] = {}
+    current_key: str | None = None
     for line in raw.splitlines():
-        if "=" in line:
+        if re.match(r"^[A-Za-z][A-Za-z0-9]*=", line):
             key, value = line.split("=", 1)
             values[key] = value
+            current_key = key
+        elif current_key == "EnvironmentFiles":
+            values[current_key] = f"{values[current_key]}\n{line}" if values[current_key] else line
     return values
+
+
+def parse_environment_files(raw: str | None) -> list[dict[str, object]]:
+    if not raw:
+        return []
+    entries: list[dict[str, object]] = []
+    for line in raw.splitlines():
+        match = re.fullmatch(r"(?P<path>/\S*) \(ignore_errors=(?P<ignore_errors>yes|no)\)", line)
+        if not match:
+            raise ReleaseError("buddy.service EnvironmentFiles entry is unsupported")
+        entries.append(
+            {
+                "path": match.group("path"),
+                "ignore_errors": match.group("ignore_errors") == "yes",
+            }
+        )
+    return entries
 
 
 def parse_exec_start(raw: str) -> tuple[str, tuple[str, ...]]:
@@ -113,6 +134,27 @@ def extract_systemd_paths(raw: str | None) -> tuple[str, ...]:
     return tuple(paths)
 
 
+def required_environment_file(path: Path) -> dict[str, object]:
+    return {"path": str(path), "ignore_errors": False}
+
+
+def environment_file_identity(entries: object) -> tuple[tuple[str, bool], ...]:
+    if not isinstance(entries, list):
+        raise ReleaseError("buddy.service EnvironmentFiles shape is unsupported")
+    normalized: list[tuple[str, bool]] = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            raise ReleaseError("buddy.service EnvironmentFiles shape is unsupported")
+        if (
+            set(entry) != {"path", "ignore_errors"}
+            or not isinstance(entry.get("path"), str)
+            or not isinstance(entry.get("ignore_errors"), bool)
+        ):
+            raise ReleaseError("buddy.service EnvironmentFiles shape is unsupported")
+        normalized.append((entry["path"], entry["ignore_errors"]))
+    return tuple(normalized)
+
+
 def read_service_identity(runtime: Runtime) -> dict[str, object]:
     props = [
         "ActiveState",
@@ -140,7 +182,7 @@ def read_service_identity(runtime: Runtime) -> dict[str, object]:
         "ExecStartArgv": list(exec_argv),
         "User": values.get("User", ""),
         "Environment": environment,
-        "EnvironmentFiles": list(extract_systemd_paths(values.get("EnvironmentFiles"))),
+        "EnvironmentFiles": parse_environment_files(values.get("EnvironmentFiles")),
         "DropInPaths": list(extract_systemd_paths(values.get("DropInPaths"))),
         "Restart": values.get("Restart", ""),
         "RestartUSec": values.get("RestartUSec", ""),
@@ -190,7 +232,7 @@ def assert_after_install_identity(before: Mapping[str, object], after: Mapping[s
         raise ReleaseError("buddy.service did not restart with a new positive MainPID")
     if after.get("WorkingDirectory") != str(config.release_root / sha):
         raise ReleaseError("buddy.service did not publish the requested release")
-    if after.get("EnvironmentFiles") != [str(config.runtime_env)]:
+    if after.get("EnvironmentFiles") != [required_environment_file(config.runtime_env)]:
         raise ReleaseError("buddy.service did not bind the expected runtime env file")
     if after.get("DropInPaths") != [str(config.dropin)]:
         raise ReleaseError("buddy.service did not load the expected release drop-in")

@@ -73,6 +73,10 @@ def service_show(
     )
 
 
+def environment_file(path: Path | str, *, ignore_errors: bool = False) -> str:
+    return f"{path} (ignore_errors={'yes' if ignore_errors else 'no'})"
+
+
 def inactive_show(wd: str = "/old") -> str:
     return service_show(wd=wd, pid=0, active="inactive", substate="dead")
 
@@ -497,6 +501,53 @@ class SourceAndManifestTests(unittest.TestCase):
 
 
 class SystemdIdentityTests(unittest.TestCase):
+    def test_environment_files_parser_preserves_required_and_optional_annotations(self) -> None:
+        raw = "\n".join(
+            [
+                "ActiveState=active",
+                "EnvironmentFiles=/home/ubuntu/.config/janitor/github-pr-reviewer.env (ignore_errors=no)",
+                "/home/ubuntu/.local/state/janitor/github-pr-reviewer/revision.env (ignore_errors=yes)",
+                "DropInPaths=/etc/systemd/system/example.service.d/10-release.conf",
+            ]
+        )
+        values = buddy.parse_systemctl_show(raw)
+        self.assertEqual(
+            buddy.parse_environment_files(values["EnvironmentFiles"]),
+            [
+                {
+                    "path": "/home/ubuntu/.config/janitor/github-pr-reviewer.env",
+                    "ignore_errors": False,
+                },
+                {
+                    "path": "/home/ubuntu/.local/state/janitor/github-pr-reviewer/revision.env",
+                    "ignore_errors": True,
+                },
+            ],
+        )
+        self.assertEqual(
+            buddy.extract_systemd_paths(values["DropInPaths"]),
+            ("/etc/systemd/system/example.service.d/10-release.conf",),
+        )
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config = make_config(Path(tmp))
+            identity = buddy.read_service_identity(
+                FakeRuntime(config, shows=[service_show(envfiles=values["EnvironmentFiles"])])
+            )
+            self.assertEqual(identity["EnvironmentFiles"], buddy.parse_environment_files(values["EnvironmentFiles"]))
+
+    def test_environment_files_parser_rejects_unannotated_malformed_or_unknown_annotations(self) -> None:
+        bad_values = [
+            "/etc/buddy/runtime.env",
+            "/etc/buddy/runtime.env (ignore_errors=maybe)",
+            "/etc/buddy/runtime.env (required=no)",
+            "/etc/buddy/runtime.env (ignore_errors=no) extra",
+            "/etc/buddy/runtime.env (ignore_errors=no",
+        ]
+        for raw in bad_values:
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(buddy.ReleaseError, "EnvironmentFiles"):
+                    buddy.parse_environment_files(raw)
+
     def test_actual_restart_usec_and_sanitized_environment_identity(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             config = make_config(Path(tmp))
@@ -518,6 +569,33 @@ class SystemdIdentityTests(unittest.TestCase):
             with self.assertRaisesRegex(buddy.ReleaseError, "FragmentPath"):
                 buddy.assert_prior_service_identity(FakeRuntime(config), identity)
 
+    def test_install_identity_requires_one_required_runtime_environment_file(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config = make_config(Path(tmp))
+            prior = buddy.read_service_identity(FakeRuntime(config, shows=[service_show()]))
+            after = dict(prior)
+            after.update(
+                {
+                    "WorkingDirectory": str(config.release_root / GOOD_SHA),
+                    "MainPID": prior["MainPID"] + 1,
+                    "EnvironmentFiles": [{"path": str(config.runtime_env), "ignore_errors": False}],
+                    "DropInPaths": [str(config.dropin)],
+                }
+            )
+            buddy.assert_after_install_identity(prior, after, config=config, sha=GOOD_SHA)
+            for envfiles in [
+                [{"path": str(config.runtime_env), "ignore_errors": True}],
+                [
+                    {"path": str(config.runtime_env), "ignore_errors": False},
+                    {"path": "/tmp/extra.env", "ignore_errors": True},
+                ],
+            ]:
+                with self.subTest(envfiles=envfiles):
+                    changed = dict(after)
+                    changed["EnvironmentFiles"] = envfiles
+                    with self.assertRaisesRegex(buddy.ReleaseError, "runtime env"):
+                        buddy.assert_after_install_identity(prior, changed, config=config, sha=GOOD_SHA)
+
 
 class InstallRollbackTests(unittest.TestCase):
     def test_install_accepts_current_503_memory_false_baseline_and_requires_new_pid(self) -> None:
@@ -531,7 +609,7 @@ class InstallRollbackTests(unittest.TestCase):
                 service_show(
                     wd=str(config.release_root / GOOD_SHA),
                     pid=2222,
-                    envfiles=str(config.runtime_env),
+                    envfiles=environment_file(config.runtime_env),
                     dropins=str(config.dropin),
                 ),
             ]
@@ -548,6 +626,14 @@ class InstallRollbackTests(unittest.TestCase):
             self.assertEqual(receipt["phase"], "installed")
             self.assertFalse(receipt["before"]["health"]["memory"])
             self.assertEqual(receipt["after"]["systemd"]["MainPID"], 2222)
+            self.assertEqual(
+                receipt["after"]["systemd"]["EnvironmentFiles"],
+                [{"path": str(config.runtime_env), "ignore_errors": False}],
+            )
+            self.assertEqual(
+                json.loads(json.dumps(receipt))["after"]["systemd"]["EnvironmentFiles"],
+                receipt["after"]["systemd"]["EnvironmentFiles"],
+            )
             self.assertNotIn("sk-test-secret", Path(result["receipt"]).read_text())
 
     def test_install_accepts_native_unit_mode_0600_and_preserves_it_in_receipt(self) -> None:
@@ -561,7 +647,7 @@ class InstallRollbackTests(unittest.TestCase):
                 service_show(
                     wd=str(config.release_root / GOOD_SHA),
                     pid=2223,
-                    envfiles=str(config.runtime_env),
+                    envfiles=environment_file(config.runtime_env),
                     dropins=str(config.dropin),
                 ),
             ]
@@ -594,13 +680,13 @@ class InstallRollbackTests(unittest.TestCase):
                 service_show(
                     wd=str(config.release_root / GOOD_SHA),
                     pid=2224,
-                    envfiles=str(config.runtime_env),
+                    envfiles=environment_file(config.runtime_env),
                     dropins=str(config.dropin),
                 ),
                 service_show(
                     wd=str(config.release_root / GOOD_SHA),
                     pid=2224,
-                    envfiles=str(config.runtime_env),
+                    envfiles=environment_file(config.runtime_env),
                     dropins=str(config.dropin),
                 ),
                 inactive_show(wd=str(config.release_root / GOOD_SHA)),
@@ -770,6 +856,23 @@ class InstallRollbackTests(unittest.TestCase):
             with self.assertRaisesRegex(buddy.ReleaseError, "outside this transaction"):
                 buddy.rollback_from_receipt(receipt_path.name, runtime=runtime)
             self.assertEqual(config.runtime_env.read_text(), "OPENROUTER_API_KEY=peer\n")
+            self.assertFalse(any(call[1:2] == ["stop"] for call in runtime.calls))
+
+    def test_rollback_rejects_runtime_env_optional_flag_mismatch_before_stop(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config, runtime = write_install_fixture(Path(tmp))
+            receipt_path = create_interrupted_receipt(config, phase="dropin_written")
+            write_file(config.runtime_env, "OPENROUTER_API_KEY=new\n", 0o600)
+            write_file(config.dropin, "[Service]\nWorkingDirectory=/new\n", 0o644)
+            runtime.shows = [
+                service_show(
+                    wd=str(config.release_root / GOOD_SHA),
+                    envfiles=environment_file(config.runtime_env, ignore_errors=True),
+                    dropins=str(config.dropin),
+                ),
+            ]
+            with self.assertRaisesRegex(buddy.ReleaseError, "EnvironmentFiles changed"):
+                buddy.rollback_from_receipt(receipt_path.name, runtime=runtime)
             self.assertFalse(any(call[1:2] == ["stop"] for call in runtime.calls))
 
     def test_rollback_readback_mismatch_fails_after_restore_attempt(self) -> None:

@@ -1,5 +1,13 @@
 ## Recovery ownership
 
+October 2 review correction: actual OCI systemd255 emits annotated multiline
+environment-file entries. The previous parser lost optional-file status and
+could omit continuation lines. Source now preserves each path and boolean
+`ignore_errors` in a JSON-stable identity, rejects unsupported entries, and
+requires exactly the mandatory Buddy runtime file after install. The actual
+empty Buddy prior identity and `DropInPaths` behavior are preserved. All 32
+release tests pass; no runtime, route or provider action occurred.
+
 OCI is Buddy's active host. Homelab is its recovery host under the Homelab OCI application recovery contract. A Git SHA does not identify the running app when the deployment checkout has unpublished edits. A clean Homelab rebuild is a candidate until source parity, private health, scoped credentials, an operation, fencing, route, and return are independently verified. The inspected server API routes have no durable server state; browser preferences are client local storage.
 
 The 2026-09-29 source reconciliation keeps the child-facing cloud restrictions and existing local/TTS controls from reviewed main. OCI's unpublished replacement used an `/api/check-local` route absent from the tracked API routes, parsed each network chunk as if it were an entire SSE line, and introduced an extra CSS brace. These edits are preserved privately for comparison; they are not a release or evidence of active runtime parity. The reviewed main stream parser already buffers partial SSE lines and the prior health fix uses the V8 heap limit.
