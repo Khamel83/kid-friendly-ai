@@ -17,6 +17,7 @@ from unittest import mock
 
 
 MODULE_PATH = Path(__file__).with_name("buddy_oci_release.py")
+sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("buddy_oci_release", MODULE_PATH)
 buddy = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

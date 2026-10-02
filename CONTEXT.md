@@ -11,8 +11,12 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 
 - October 2: the Buddy-specific release helper is prepared for trusted PR
   review from fetched default `b99eb896`. Independent review and 25 focused
-  tests pass. It prepares an immutable keyless-tested build, changes only
-  Buddy's environment/drop-in, and records guarded rollback evidence.
+  tests pass. Trusted review blocked once because the former single
+  `ops/buddy_oci_release.py` exceeded reviewer file coverage; the privileged
+  operator source is now split into the CLI plus colocated primitives and state
+  helper modules so each reviewed file is under the per-file budget. It prepares
+  an immutable keyless-tested build, changes only Buddy's environment/drop-in,
+  and records guarded rollback evidence.
   [The release contract](docs/RECOVERY.md#bounded-oci-release-helper) owns the
   detailed safeguards. No OCI deployment or provider operation is proved yet.
 - At source commit `8f66a6609dbac0b75ce47d30f55241270e55cfb6`, the repository documents Buddy as active on OCI with Homelab designated as its recovery host under the Homelab OCI application recovery contract.
