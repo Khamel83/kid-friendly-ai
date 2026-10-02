@@ -1,10 +1,4 @@
-"""Bounded Buddy OCI release helper.
-
-This helper is Buddy-specific. It prepares one reviewed GitHub SHA as a
-root-owned release tree and installs that tree into the existing OCI
-``buddy.service`` by changing only the service WorkingDirectory and required
-EnvironmentFile drop-in.
-"""
+"""Bounded Buddy OCI release primitives."""
 
 from __future__ import annotations
 
@@ -32,6 +26,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Sequence
+
+import buddy_release_git as release_git
 
 SERVICE_NAME = "buddy.service"
 REPO_URL = "git@github.com:Khamel83/kid-friendly-ai.git"
@@ -85,9 +81,7 @@ SOURCE_ENV_KEYS = {
 }
 RUNTIME_ENV_KEYS = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY")
 SOURCE_ENV_EXAMPLE_PATHS = {".env.example", ".env.docker.example", ".env.local.example"}
-SENSITIVE_NAME_TERMS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
-SENSITIVE_NAME_RE = re.compile("(" + "|".join(SENSITIVE_NAME_TERMS) + ")", re.I)
-SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+SENSITIVE_NAME_RE = release_git.SENSITIVE_NAME_RE
 TX_ID_RE = re.compile(r"^\d{8}T\d{6}Z\.[0-9a-f]{40}\.[0-9a-f]{32}$")
 SAFE_VALUE_RE = re.compile(r"^[A-Za-z0-9_./:@%+=,-]+$")
 MAX_ENV_BYTES = 64 * 1024
@@ -321,15 +315,7 @@ def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def safe_command(cmd: Sequence[str]) -> str:
-    safe_parts: list[str] = []
-    for part in cmd:
-        if "=" in part and SENSITIVE_NAME_RE.search(part.split("=", 1)[0]):
-            key = part.split("=", 1)[0]
-            safe_parts.append(f"{key}=<redacted>")
-        else:
-            safe_parts.append(Path(part).name if part.startswith("/") else part)
-    return " ".join(safe_parts)
+safe_command = release_git.safe_command
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -344,26 +330,19 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def env_assignments(env: Mapping[str, str]) -> list[str]:
-    return [f"{key}={value}" for key, value in sorted(env.items())]
+MINIMAL_GIT_CONFIG = release_git.MINIMAL_GIT_CONFIG
+git_blob_id = release_git.git_blob_id
+
+
+env_assignments = release_git.env_assignments
 
 
 def validate_sha(value: str) -> str:
-    if not SHA_RE.fullmatch(value):
-        raise ReleaseError("release SHA must be a lowercase 40-character Git SHA")
-    return value
+    return _translate_git_call(release_git.validate_sha, value)
 
 
 def sanitized_build_env(user_home: str) -> dict[str, str]:
-    leaked = sorted(k for k in os.environ if SENSITIVE_NAME_RE.search(k))
-    if leaked:
-        raise ReleaseError("refusing ambient secret-bearing build environment keys")
-    return {
-        "HOME": user_home,
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "npm_config_audit": "false",
-        "npm_config_fund": "false",
-    }
+    return _translate_git_call(release_git.sanitized_build_env, user_home)
 
 
 def absolute_lexical(path: Path) -> Path:
@@ -655,6 +634,28 @@ def fsync_tree(root: Path) -> None:
     fsync_dir(root)
 
 
+chmod_tree_for_cleanup = release_git.chmod_tree_for_cleanup
+
+
+def _translate_git_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except release_git.GitVerificationError as exc:
+        raise ReleaseError(str(exc)) from exc
+
+
+def write_minimal_git_config(config_path: Path, *, uid: int, gid: int) -> None:
+    _translate_git_call(release_git.write_minimal_git_config, config_path, uid=uid, gid=gid)
+
+
+def validate_copied_git_metadata_entry(path: Path, *, git_dir: Path, uid: int) -> bool:
+    return _translate_git_call(release_git.validate_copied_git_metadata_entry, path, git_dir=git_dir, uid=uid)
+
+
+def validate_copied_git_metadata(git_dir: Path, *, uid: int, gid: int) -> None:
+    _translate_git_call(release_git.validate_copied_git_metadata, git_dir, uid=uid, gid=gid)
+
+
 def restore_file(config: ReleaseConfig, path: Path, image: FileImage) -> None:
     if image.exists:
         if image.data is None:
@@ -741,7 +742,13 @@ def validate_manifest_schema(data: Mapping[str, object], release_dir: Path, *, c
     if data.get("project") != "buddy" or data.get("source_sha") != sha or data.get("complete") is not True:
         raise ReleaseError("release manifest does not match the requested complete source SHA")
     source = require_mapping(data.get("source"), "manifest source proof")
-    if source.get("sha") != sha or source.get("default_sha") != sha or source.get("head_sha") != sha or source.get("status_clean") is not True:
+    if (
+        source.get("sha") != sha
+        or source.get("default_sha") != sha
+        or source.get("head_sha") != sha
+        or source.get("root_verified_sha") != sha
+        or source.get("status_clean") is not True
+    ):
         raise ReleaseError("release manifest source proof is incomplete")
     build = require_mapping(data.get("build"), "manifest build proof")
     build_id_path = release_dir / ".next" / "BUILD_ID"
@@ -782,24 +789,11 @@ def validate_release_tree(release_dir: Path, *, config: ReleaseConfig | None = N
     return data
 
 
-def iter_source_policy_paths(source_dir: Path) -> Iterator[Path]:
-    for current_root, dirnames, filenames in os.walk(source_dir):
-        rel_root = Path(current_root).relative_to(source_dir)
-        dirnames[:] = [
-            name
-            for name in dirnames
-            if not any(part in {".git", "node_modules", ".next"} for part in (rel_root / name).parts)
-        ]
-        for filename in filenames:
-            yield rel_root / filename if rel_root != Path(".") else Path(filename)
+iter_source_policy_paths = release_git.iter_source_policy_paths
 
 
 def validate_source_env_policy(source_dir: Path, tracked_paths: Sequence[str] | None = None) -> None:
-    paths = [Path(item) for item in tracked_paths] if tracked_paths is not None else list(iter_source_policy_paths(source_dir))
-    for rel_path in paths:
-        rel = rel_path.as_posix()
-        if rel_path.name.startswith(".env") and rel not in SOURCE_ENV_EXAMPLE_PATHS:
-            raise ReleaseError(f"refusing source with local env file: {rel}")
+    _translate_git_call(release_git.validate_source_env_policy, source_dir, tracked_paths=tracked_paths)
 
 
 def assert_prepare_git_state(
@@ -811,34 +805,31 @@ def assert_prepare_git_state(
     default_branch: str,
     allow_build_outputs: bool,
 ) -> str:
-    default_ref = runtime.run_as_service_user([BIN["git"], "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=source, env=env, timeout=TIMEOUTS["git"])
-    if default_ref.rsplit("/", 1)[-1] != default_branch:
-        raise ReleaseError("fetched default branch changed during prepare")
-    default_sha = runtime.run_as_service_user([BIN["git"], "rev-parse", f"origin/{default_branch}"], cwd=source, env=env, timeout=TIMEOUTS["git"])
-    if default_sha != sha:
-        raise ReleaseError("requested SHA is no longer the fetched default branch")
-    head_sha = runtime.run_as_service_user([BIN["git"], "rev-parse", "HEAD"], cwd=source, env=env, timeout=TIMEOUTS["git"])
-    if head_sha != sha:
-        raise ReleaseError("checked-out source SHA changed during prepare")
-    status = runtime.run_as_service_user(
-        [BIN["git"], "status", "--porcelain", "--ignored=matching", "--untracked-files=all"],
-        cwd=source,
+    return _translate_git_call(
+        release_git.assert_prepare_git_state,
+        runtime,
+        source,
         env=env,
-        timeout=TIMEOUTS["git"],
+        sha=sha,
+        default_branch=default_branch,
+        allow_build_outputs=allow_build_outputs,
     )
-    unexpected: list[str] = []
-    for line in status.splitlines():
-        if len(line) < 4:
-            unexpected.append(line)
-            continue
-        code = line[:2]
-        rel = line[3:]
-        if allow_build_outputs and code == "!!" and (rel == ".next/" or rel.startswith(".next/") or rel == "node_modules/" or rel.startswith("node_modules/")):
-            continue
-        unexpected.append(line)
-    if unexpected:
-        raise ReleaseError("source checkout changed during prepare")
-    return head_sha
+
+
+isolated_git_env = release_git.isolated_git_env
+isolated_git_cmd = release_git.isolated_git_cmd
+
+
+def run_isolated_git(runtime: Runtime, repo: Path, *args: str) -> str:
+    return _translate_git_call(release_git.run_isolated_git, runtime, repo, *args)
+
+
+def parse_ls_tree(output: str) -> list[tuple[str, str, str, str]]:
+    return _translate_git_call(release_git.parse_ls_tree, output)
+
+
+def validate_copied_release_against_git_tree(release_dir: Path, *, sha: str, runtime: Runtime) -> str:
+    return _translate_git_call(release_git.validate_copied_release_against_git_tree, release_dir, sha=sha, runtime=runtime)
 
 
 def chmod_release_tree(root: Path, *, uid: int, gid: int, final_root: bool = True) -> None:
@@ -868,6 +859,7 @@ def write_manifest(
     sha: str,
     default_branch: str,
     head_sha: str,
+    root_verified_sha: str,
     node_version: str,
     npm_version: str,
     probe: Mapping[str, object],
@@ -884,6 +876,7 @@ def write_manifest(
             "default_branch": default_branch,
             "default_sha": sha,
             "head_sha": head_sha,
+            "root_verified_sha": root_verified_sha,
             "status_clean": True,
         },
         "build": {
@@ -946,6 +939,7 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
         source = user_stage / "source"
         root_stage = config.staging_root / f"{sha}.{uuid.uuid4().hex}.root"
         env = sanitized_build_env(user_info.pw_dir)
+        published_release = False
         try:
             runtime.run_as_service_user([BIN["git"], "clone", "--no-checkout", config.repo_url, str(source)], cwd=user_stage, env=env, timeout=TIMEOUTS["git"])
             runtime.run_as_service_user([BIN["git"], "fetch", "--prune", "origin"], cwd=source, env=env, timeout=TIMEOUTS["git"])
@@ -970,11 +964,19 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
             node_version = runtime.run_as_service_user([BIN["node"], "--version"], cwd=source, env=env, timeout=TIMEOUTS["git"])
             npm_version = runtime.run_as_service_user([BIN["npm"], "--version"], cwd=source, env=env, timeout=TIMEOUTS["git"])
             actual = assert_prepare_git_state(runtime, source, env=env, sha=sha, default_branch=default_branch, allow_build_outputs=True)
-            shutil.rmtree(source / ".git")
             root_stage.mkdir(mode=0o700)
+            try:
+                os.chown(root_stage, config.root_uid, config.root_gid)
+            except PermissionError:
+                if os.geteuid() == 0:
+                    raise
+            os.chmod(root_stage, 0o700)
             fsync_dir(config.staging_root)
             staged_release = root_stage / "release"
             shutil.copytree(source, staged_release, symlinks=True)
+            root_verified_sha = validate_copied_release_against_git_tree(staged_release, sha=sha, runtime=runtime)
+            shutil.rmtree(staged_release / ".git")
+            fsync_dir(staged_release)
             chmod_release_tree(staged_release, uid=config.root_uid, gid=config.root_gid, final_root=False)
             write_manifest(
                 config,
@@ -982,6 +984,7 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
                 sha=sha,
                 default_branch=default_branch,
                 head_sha=actual,
+                root_verified_sha=root_verified_sha,
                 node_version=node_version,
                 npm_version=npm_version,
                 probe=probe,
@@ -993,11 +996,29 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
             if release_dir.exists() or release_dir.is_symlink():
                 raise ReleaseError(f"release already exists: {release_dir}")
             os.rename(staged_release, release_dir)
+            published_release = True
             os.chmod(release_dir, 0o555)
+            fsync_dir(release_dir)
             fsync_dir(config.release_root)
             with contextlib.suppress(OSError):
                 root_stage.rmdir()
             manifest = validate_release_tree(release_dir, config=config, sha=sha)
+        except Exception as exc:
+            if not published_release:
+                try:
+                    if root_stage.exists() or root_stage.is_symlink():
+                        chmod_tree_for_cleanup(root_stage)
+                        shutil.rmtree(root_stage)
+                        fsync_dir(config.staging_root)
+                except Exception as cleanup_exc:
+                    raise ReleaseError(
+                        "prepare failed during root_stage; cleanup failed during exact_root_stage: "
+                        f"primary={type(exc).__name__} cleanup={type(cleanup_exc).__name__}"
+                    ) from exc
+            else:
+                with contextlib.suppress(OSError):
+                    root_stage.rmdir()
+            raise
         finally:
             with contextlib.suppress(FileNotFoundError):
                 shutil.rmtree(user_stage)

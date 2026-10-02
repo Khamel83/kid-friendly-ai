@@ -1,62 +1,30 @@
-# Current checkpoint — 2026-10-02
+# Current checkpoint — October 2
 
-Latest correction: systemd255 multiline `EnvironmentFiles` now retains
-required/optional flags; unsupported or unannotated entries refuse. Installed
-identity requires exactly the mandatory runtime file, and rollback preserves
-flags after receipt JSON round-trip. The actual empty prior Buddy baseline is
-unchanged. All 32 release tests and compilation pass. Next: independent final
-review, publish the new PR25 head, require trusted PASS and both Node CI jobs,
-then use only the guarded OCI prepare/install path. The active dirty checkout
-and native unit remain protected; no OCI prepare/install has run.
+PR25 source repairs pass40 tests and independent adversarial review. Root
+verifies copied Git/tree/blob/mode identity independently of the user index,
+uses full strict fsck and binds root_verified_sha in the manifest. Cleanup
+removes only its exact unpublished stage; post-rename failure preserves the
+release. Systemd255 environment-file flags survive receipt/rollback checks.
+Include four production files: buddy_oci_release.py, buddy_release_primitives.py,
+buddy_release_git.py, buddy_release_state.py. Final-head trusted PASS/Node CI
+and OCI deployment remain open; protected dirty checkouts and service unchanged.
 
-**Source:** The parent fetched origin and independently verified default `main`
-at `b99eb89680419876345d2d76131e453202455b17` again before publishing the
-module split. The isolated branch preserves the dirty Mac and OCI checkouts.
-Worker sandbox freshness failures were independently resolved by the parent
-fetch/readback before publication.
-Independent review verified all 91 prior function/class bodies are unchanged;
-the prior exact head `91ba28b6dd543a476ae2797f1b92c53a1f4ac1cc` had CI and
-independent review PASS, but trusted PR review blocked at 19:46:35 because the
-single 83 KB operator file was truncated by reviewer file coverage. That
-coverage blocker is fixed in source only by splitting the privileged operator
-source into the CLI plus two colocated helper modules. A parent OCI preflight
-then found the native `/etc/systemd/system/buddy.service` is root-owned,
-regular, single-link mode `0600`; the source now accepts exactly native unit
-mode `0600` or `0644`, records its exact beforeimage, preserves it through
-rollback, and rejects unsafe modes before intent/stop/write. Trusted PR review
-at the new final head remains required.
-The trusted `04d0e10` review also identified redacted ordinary parser
-identifiers. Their clearer assignment names preserve behavior and expose the
-complete control flow; the existing redactor still removes synthetic secrets.
-No global reviewer policy was changed. Parent validation passed all 28 tests
-and measured the final diff below both review coverage limits.
+Recheck: python3 -m unittest discover -s ops -p 'test_buddy*.py' -v.
+Next: reviewed merge, exact fetched-source prepare, then guarded install with
+beforeimage expectations. [Operator contract](docs/RECOVERY.md#bounded-oci-release-helper).
 
-**Implemented source change:** Preserved the public CLI surface in `ops/buddy_oci_release.py`, re-exported `prepare_release` from `ops/buddy_release_primitives.py`, kept `install_release`/rollback/parser/main in the CLI, and moved systemd/probe/receipt/transaction CAS helpers to `ops/buddy_release_state.py`. The CLI explicitly imports/re-exports the helper names used by tests and operator workflows; script execution as `python3 .../ops/buddy_oci_release.py` resolves sibling modules from the reviewed `ops/` directory. This turn also fixed the native unit mode policy so install validates `0600`/`0644` before intent, rollback uses the same allowed set, and receipts/CAS preserve the native unit without rewriting it. No runtime path, provider path, route, credential handling, or live unit permissions were changed.
+## Historical September 29 checkpoint
 
-**Deployed runtime:** Not changed. The known active OCI runtime remains
-`buddy.service` from `/home/ubuntu/github/kid-friendly-ai`, with protected
-unpublished edits and private health 503. Source publication does not prove
-systemd activation, runtime parity or provider effect.
+# Current checkpoint — 2026-09-29
 
-**Durable receipt:** Source-only receipts are this repository diff and local test output. No OCI receipt exists for this branch because the revised helper was not run on OCI.
+**Source:** Buddy [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head Janitor PASS and Node 18/20 CI PASS on `16c6f1e`. The candidate preserves child-facing cloud restrictions and local/TTS controls, and repairs SSE errors, current history, and local-to-cloud fallback. The final protected OCI app-file SHA-256 prefixes are index `1986b521`, ask `03aa9b31`, mode `1ef15e1a`; no OCI file was reset. Current OCI active checkout remains `30ead698` with staged/unstaged edits, so this reviewed source is not proven identical to the running artifact.
 
-**Downstream effect:** Not tested. There is no provider operation, AI answer, route fencing, public route, client effect, rollback drill, or return proof from this turn.
+**Deployed runtime:** OCI system `buddy.service` was active at `30ead698` on the 2026-09-29 recheck; private health remained 503. An exact `16c6f1e` tracked-source archive built on Homelab with package lock SHA-256 `1d95e372…`; keyless loopback probe gave home 200, health 503 (`memory=true`, `api=false`), and empty-question 400. Probe process, port, and scratch were removed; Homelab recovery unit stayed inactive. No production route or active OCI runtime changed.
 
-**Checks run locally:**
+**Durable receipt:** Private Homelab `/mnt/main-drive/backups/project-state/buddy/recovery-drills/20260929T232428Z.json`, SHA-256 `d6f718166731108c00097f26c40f2598b99226f843a0a5c6662cc6fd3d5ba73a`, records the isolated probe. No scheduled backup is required for the inspected stateless server routes; no active deployment or cold-swap packet exists.
 
-- `python3 -m unittest -v ops/test_buddy_oci_release.py` — 28 tests passed.
-- `python3 -m py_compile ops/buddy_oci_release.py ops/buddy_release_primitives.py ops/buddy_release_state.py ops/test_buddy_oci_release.py` — passed.
-- `python3 ops/buddy_oci_release.py --help` and `python3 ops/buddy_oci_release.py install --help` — passed.
-- `bash -n ops/recovery-probe.sh` — passed.
-- `git diff --check` — passed; the owned patch files remain below 48,000 bytes each.
+**Downstream effect:** No provider call, AI response, client route change, or failback was tested. No spend was incurred by the probe.
 
-**Next:** Obtain trusted review at the published final head, merge, then use
-the authorized scoped OCI release path. Recheck the protected host first:
+**Checks:** Focused SSE tests 2/2, changed-file ESLint, production build, exact-head Janitor review, and Node 18/20 CI passed. Repository-wide lint/type checks still fail in unrelated pre-existing files (`ContentUpdates.tsx`, `disabled-tests/*.ts`); CI treats those two checks as nonblocking. The keyless probe made no provider request and did not prove an AI answer.
 
-```bash
-systemctl show buddy.service -p ActiveState -p WorkingDirectory
-git -C /home/ubuntu/github/kid-friendly-ai status --short
-curl http://127.0.0.1:3000/api/health
-```
-
-Then run the helper from reviewed source on OCI only under the documented limits in `docs/RECOVERY.md`: prepare the exact published full SHA, compute exact beforeimage expectations for `/etc/buddy/runtime.env` and `/etc/systemd/system/buddy.service.d/10-release.conf`, perform a dry run if desired, and install only after trusted review/merge. Keep source preparation, runtime health, provider operation, route fencing, downstream client effect, rollback, and return as separate evidence gates.
+Next: establish exact running-artifact/source parity without discarding the protected OCI patch; then deploy the reviewed health fix to the active service. Install a persistent inactive Homelab release with scoped provider credentials, verify a bounded real operation, and prove route fencing and return under the Homelab recovery contract. Recheck OCI with `systemctl show buddy.service -p ActiveState -p WorkingDirectory`, `git -C /home/ubuntu/github/kid-friendly-ai status --short`, and `curl http://127.0.0.1:3000/api/health` without printing credentials.

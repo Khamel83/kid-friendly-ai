@@ -1,12 +1,12 @@
-## Recovery ownership
+## Current release preparation — October 2
 
-October 2 review correction: actual OCI systemd255 emits annotated multiline
-environment-file entries. The previous parser lost optional-file status and
-could omit continuation lines. Source now preserves each path and boolean
-`ignore_errors` in a JSON-stable identity, rejects unsupported entries, and
-requires exactly the mandatory Buddy runtime file after install. The actual
-empty Buddy prior identity and `DropInPaths` behavior are preserved. All 32
-release tests pass; no runtime, route or provider action occurred.
+PR25 fixes the root-copy handoff race: independent copied Git/tree/blob/mode
+verification, full strict fsck, fixed Git config and manifest source binding.
+Exact-stage cleanup preserves published releases. Independent review/40 tests
+pass. Systemd255 environment flags and native unit modes are preserved.
+Final-head PASS/CI and OCI deployment remain open; runtime is unchanged.
+
+## Recovery ownership
 
 OCI is Buddy's active host. Homelab is its recovery host under the Homelab OCI application recovery contract. A Git SHA does not identify the running app when the deployment checkout has unpublished edits. A clean Homelab rebuild is a candidate until source parity, private health, scoped credentials, an operation, fencing, route, and return are independently verified. The inspected server API routes have no durable server state; browser preferences are client local storage.
 
@@ -17,19 +17,6 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 <!-- janitor:begin:recent -->
 ## Recent verified state
 
-- October 2: the Buddy-specific release helper is prepared for trusted PR
-  review from fetched default `b99eb896`. Local 28 focused tests pass. Parent
-  preflight found the native systemd unit on OCI is root
-  `0600`; source now accepts only exact root-owned regular single-link native
-  unit modes `0600` or `0644`, records the native unit beforeimage, and never
-  rewrites it. Trusted review blocked once because the former single
-  `ops/buddy_oci_release.py` exceeded reviewer file coverage; the privileged
-  operator source is now split into the CLI plus colocated primitives and state
-  helper modules so each reviewed file is under the per-file budget. It prepares
-  an immutable keyless-tested build, changes only Buddy's environment/drop-in,
-  and records guarded rollback evidence.
-  [The release contract](docs/RECOVERY.md#bounded-oci-release-helper) owns the
-  detailed safeguards. No OCI deployment or provider operation is proved yet.
 - At source commit `8f66a6609dbac0b75ce47d30f55241270e55cfb6`, the repository documents Buddy as active on OCI with Homelab designated as its recovery host under the Homelab OCI application recovery contract.
 - Source reconciliation completed in `16c6f1edc6c6e69d85e769708eafc7f7f491b8be` and was merged in `cab8cfb283bef7d8d1bfbff93c8fb98e020fd77b`. It retained the child-facing cloud restrictions and existing local/TTS controls from reviewed main while separately identifying unpublished OCI edits that used an untracked `/api/check-local` route, mishandled partial SSE chunks, and contained an extra CSS brace. Those private edits are not evidence of a release or runtime parity.
 - A reviewed keyless Homelab recovery drill is recorded in `c95f0e15a3925a029e9068273b15c10b97f11504` and merged in `aedce674773cc0cac4570b1f513ae231a27529d1`. It proves rebuild and bounded input rejection only; a 503 health result without a provider key is consistent with that probe and is not proof of application parity.
