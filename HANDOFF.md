@@ -1,3 +1,20 @@
+# Current checkpoint — October 2
+
+PR25 source repairs pass40 tests and independent adversarial review. Root
+verifies copied Git/tree/blob/mode identity independently of the user index,
+uses full strict fsck and binds root_verified_sha in the manifest. Cleanup
+removes only its exact unpublished stage; post-rename failure preserves the
+release. Systemd255 environment-file flags survive receipt/rollback checks.
+Include four production files: buddy_oci_release.py, buddy_release_primitives.py,
+buddy_release_git.py, buddy_release_state.py. Final-head trusted PASS/Node CI
+and OCI deployment remain open; protected dirty checkouts and service unchanged.
+
+Recheck: python3 -m unittest discover -s ops -p 'test_buddy*.py' -v.
+Next: reviewed merge, exact fetched-source prepare, then guarded install with
+beforeimage expectations. [Operator contract](docs/RECOVERY.md#bounded-oci-release-helper).
+
+## Historical September 29 checkpoint
+
 # Current checkpoint — 2026-09-29
 
 **Source:** Buddy [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head Janitor PASS and Node 18/20 CI PASS on `16c6f1e`. The candidate preserves child-facing cloud restrictions and local/TTS controls, and repairs SSE errors, current history, and local-to-cloud fallback. The final protected OCI app-file SHA-256 prefixes are index `1986b521`, ask `03aa9b31`, mode `1ef15e1a`; no OCI file was reset. Current OCI active checkout remains `30ead698` with staged/unstaged edits, so this reviewed source is not proven identical to the running artifact.
