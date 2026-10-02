@@ -10,8 +10,11 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 ## Recent verified state
 
 - October 2: the Buddy-specific release helper is prepared for trusted PR
-  review from fetched default `b99eb896`. Independent review and 25 focused
-  tests pass. Trusted review blocked once because the former single
+  review from fetched default `b99eb896`. Local 28 focused tests pass. Parent
+  preflight found the native systemd unit on OCI is root
+  `0600`; source now accepts only exact root-owned regular single-link native
+  unit modes `0600` or `0644`, records the native unit beforeimage, and never
+  rewrites it. Trusted review blocked once because the former single
   `ops/buddy_oci_release.py` exceeded reviewer file coverage; the privileged
   operator source is now split into the CLI plus colocated primitives and state
   helper modules so each reviewed file is under the per-file budget. It prepares

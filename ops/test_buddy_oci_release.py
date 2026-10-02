@@ -203,13 +203,13 @@ class FakeRuntime(buddy.Runtime):
         return ""
 
 
-def write_install_fixture(root: Path) -> tuple[buddy.ReleaseConfig, FakeRuntime]:
+def write_install_fixture(root: Path, *, unit_mode: int = 0o644) -> tuple[buddy.ReleaseConfig, FakeRuntime]:
     config = make_config(root)
     make_release(config)
     write_file(config.source_env, "OPENROUTER_API_KEY=sk-test-secret\n", 0o600)
     write_file(config.runtime_env, "OPENROUTER_API_KEY=old\n", 0o600)
     write_file(config.dropin, "[Service]\nWorkingDirectory=/old\n", 0o644)
-    write_file(config.unit, "[Service]\nExecStart=/usr/bin/npm start\n", 0o644)
+    write_file(config.unit, "[Service]\nExecStart=/usr/bin/npm start\n", unit_mode)
     return config, FakeRuntime(config)
 
 
@@ -549,6 +549,102 @@ class InstallRollbackTests(unittest.TestCase):
             self.assertFalse(receipt["before"]["health"]["memory"])
             self.assertEqual(receipt["after"]["systemd"]["MainPID"], 2222)
             self.assertNotIn("sk-test-secret", Path(result["receipt"]).read_text())
+
+    def test_install_accepts_native_unit_mode_0600_and_preserves_it_in_receipt(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config, runtime = write_install_fixture(Path(tmp), unit_mode=0o600)
+            runtime.shows = [
+                service_show(),
+                service_show(),
+                service_show(),
+                service_show(),
+                service_show(
+                    wd=str(config.release_root / GOOD_SHA),
+                    pid=2223,
+                    envfiles=str(config.runtime_env),
+                    dropins=str(config.dropin),
+                ),
+            ]
+            with mock.patch.object(buddy, "probe_degraded_baseline", return_value=BASELINE_503_MEMORY_FALSE), \
+                mock.patch.object(buddy, "probe_post_install", return_value=POST_INSTALL_200):
+                result = buddy.install_release(
+                    GOOD_SHA,
+                    expect_runtime_env_sha256=buddy.sha256_file(config.runtime_env),
+                    expect_dropin_sha256=buddy.sha256_file(config.dropin),
+                    dry_run=False,
+                    runtime=runtime,
+                )
+            receipt = json.loads(Path(result["receipt"]).read_text())
+            self.assertEqual(receipt["before"]["unit"]["mode"], "0o600")
+            self.assertEqual(receipt["after"]["unit"]["mode"], "0o600")
+            self.assertEqual(stat.S_IMODE(config.unit.lstat().st_mode), 0o600)
+
+    def test_post_write_install_failure_rolls_back_with_native_unit_0600_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config, runtime = write_install_fixture(Path(tmp), unit_mode=0o600)
+            original_runtime = config.runtime_env.read_bytes()
+            original_dropin = config.dropin.read_bytes()
+            original_unit = config.unit.read_bytes()
+            original_unit_mode = stat.S_IMODE(config.unit.lstat().st_mode)
+            runtime.shows = [
+                service_show(),
+                service_show(),
+                service_show(),
+                service_show(),
+                service_show(
+                    wd=str(config.release_root / GOOD_SHA),
+                    pid=2224,
+                    envfiles=str(config.runtime_env),
+                    dropins=str(config.dropin),
+                ),
+                service_show(
+                    wd=str(config.release_root / GOOD_SHA),
+                    pid=2224,
+                    envfiles=str(config.runtime_env),
+                    dropins=str(config.dropin),
+                ),
+                inactive_show(wd=str(config.release_root / GOOD_SHA)),
+                service_show(pid=1304),
+            ]
+            with mock.patch.object(buddy, "probe_degraded_baseline", return_value=BASELINE_503_MEMORY_FALSE), \
+                mock.patch.object(buddy, "probe_post_install", side_effect=buddy.ReleaseError("simulated post-write failure")), \
+                mock.patch.object(buddy, "probe_rollback_baseline", return_value=BASELINE_503_MEMORY_FALSE):
+                with self.assertRaisesRegex(buddy.ReleaseError, "simulated post-write failure"):
+                    buddy.install_release(
+                        GOOD_SHA,
+                        expect_runtime_env_sha256=buddy.sha256_file(config.runtime_env),
+                        expect_dropin_sha256=buddy.sha256_file(config.dropin),
+                        dry_run=False,
+                        runtime=runtime,
+                    )
+            receipts = list(config.receipt_root.glob("*.json"))
+            self.assertEqual(len(receipts), 1)
+            receipt = json.loads(receipts[0].read_text())
+            self.assertEqual(receipt["phase"], "rolled_back")
+            self.assertEqual(receipt["rollback_after"]["unit"]["mode"], "0o600")
+            self.assertEqual(config.runtime_env.read_bytes(), original_runtime)
+            self.assertEqual(config.dropin.read_bytes(), original_dropin)
+            self.assertEqual(config.unit.read_bytes(), original_unit)
+            self.assertEqual(stat.S_IMODE(config.unit.lstat().st_mode), original_unit_mode)
+
+    def test_unsafe_native_unit_mode_rejects_before_intent_stop_or_write(self) -> None:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+            config, runtime = write_install_fixture(Path(tmp), unit_mode=0o664)
+            original_runtime = config.runtime_env.read_text()
+            original_dropin = config.dropin.read_text()
+            with self.assertRaisesRegex(buddy.ReleaseError, "native unit beforeimage mode is not allowed"):
+                buddy.install_release(
+                    GOOD_SHA,
+                    expect_runtime_env_sha256=buddy.sha256_file(config.runtime_env),
+                    expect_dropin_sha256=buddy.sha256_file(config.dropin),
+                    dry_run=False,
+                    runtime=runtime,
+                )
+            self.assertEqual(config.runtime_env.read_text(), original_runtime)
+            self.assertEqual(config.dropin.read_text(), original_dropin)
+            self.assertEqual(list(config.receipt_root.glob("*.json")), [])
+            self.assertEqual(list(config.transaction_root.iterdir()), [])
+            self.assertEqual(runtime.calls, [])
 
     def test_dry_run_leaves_no_receipt_or_transaction(self) -> None:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:

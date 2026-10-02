@@ -24,7 +24,7 @@ from buddy_release_primitives import (
     MAX_ENV_BYTES,
     MAX_HTTP_BODY,
     NONTERMINAL_PHASES,
-    SECRET_KEY_RE,
+    SENSITIVE_NAME_RE,
     SERVICE_NAME,
     TERMINAL_PHASES,
     TIMEOUTS,
@@ -77,16 +77,16 @@ def parse_environment(raw: str) -> dict[str, str]:
         values: dict[str, str] = {}
     else:
         try:
-            tokens = shlex.split(raw)
+            assignments = shlex.split(raw)
         except ValueError as exc:
             raise ReleaseError("buddy.service environment is unsupported") from exc
         values = {}
-        for token in tokens:
-            if "=" not in token:
+        for assignment in assignments:
+            if "=" not in assignment:
                 raise ReleaseError("buddy.service environment is unsupported")
-            key, value = token.split("=", 1)
+            key, value = assignment.split("=", 1)
             if key not in EXPECTED_ENVIRONMENT:
-                if SECRET_KEY_RE.search(key):
+                if SENSITIVE_NAME_RE.search(key):
                     raise ReleaseError("buddy.service environment contains unsupported secret-bearing keys")
                 raise ReleaseError("buddy.service environment identity changed")
             values[key] = value

@@ -32,7 +32,6 @@ from buddy_release_primitives import (
     artifact_digest,
     assert_expected_beforeimage,
     assert_prepare_git_state,
-    assert_regular_file,
     assert_trusted_dir,
     assert_trusted_hierarchy,
     assert_trusted_parent_for_create,
@@ -109,6 +108,23 @@ from buddy_release_state import (
     write_receipt,
 )
 
+NATIVE_UNIT_ALLOWED_MODES = {0o600, 0o644}
+
+
+def capture_native_unit_image(runtime: Runtime) -> FileImage:
+    config = runtime.config
+    image = FileImage.capture(config.unit, include_data=True)
+    validate_public_file_image(
+        image.public(),
+        label="native unit",
+        uid=config.root_uid,
+        gid=config.root_gid,
+        allowed_modes=NATIVE_UNIT_ALLOWED_MODES,
+        required=True,
+    )
+    return image
+
+
 def assert_between_write_state(
     runtime: Runtime,
     *,
@@ -137,14 +153,13 @@ def install_release(
     with runtime.lock():
         assert_no_nonterminal_receipts(config)
         validate_release_tree(config.release_root / sha, config=config, sha=sha)
-        assert_regular_file(config.unit, uid=config.root_uid, mode=None, label="native buddy.service unit")
+        unit_image = capture_native_unit_image(runtime)
         parsed_env, source_env_image = read_private_source_env(config.source_env, uid=config.service_uid)
         runtime_values = projected_runtime_env(parsed_env)
         runtime_data = render_runtime_env(runtime_values)
         dropin_data = dropin_content(config.release_root / sha, config.runtime_env)
         before_runtime = assert_expected_beforeimage(config.runtime_env, expect_runtime_env_sha256)
         before_dropin = assert_expected_beforeimage(config.dropin, expect_dropin_sha256)
-        unit_image = FileImage.capture(config.unit, include_data=True)
         prior_identity = read_service_identity(runtime)
         assert_prior_service_identity(runtime, prior_identity)
         prior_health = probe_degraded_baseline(runtime, deadline_seconds=15)
@@ -409,7 +424,7 @@ def _rollback_loaded_receipt(
         require_mapping(before.get("unit"), "unit beforeimage"),
         uid=config.root_uid,
         gid=config.root_gid,
-        allowed_modes={0o644},
+        allowed_modes=NATIVE_UNIT_ALLOWED_MODES,
         label="native unit",
         required=True,
     )

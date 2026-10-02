@@ -85,7 +85,8 @@ SOURCE_ENV_KEYS = {
 }
 RUNTIME_ENV_KEYS = ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ELEVENLABS_API_KEY")
 SOURCE_ENV_EXAMPLE_PATHS = {".env.example", ".env.docker.example", ".env.local.example"}
-SECRET_KEY_RE = re.compile(r"(API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)", re.I)
+SENSITIVE_NAME_TERMS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+SENSITIVE_NAME_RE = re.compile("(" + "|".join(SENSITIVE_NAME_TERMS) + ")", re.I)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 TX_ID_RE = re.compile(r"^\d{8}T\d{6}Z\.[0-9a-f]{40}\.[0-9a-f]{32}$")
 SAFE_VALUE_RE = re.compile(r"^[A-Za-z0-9_./:@%+=,-]+$")
@@ -323,7 +324,7 @@ def utc_now() -> str:
 def safe_command(cmd: Sequence[str]) -> str:
     safe_parts: list[str] = []
     for part in cmd:
-        if "=" in part and SECRET_KEY_RE.search(part.split("=", 1)[0]):
+        if "=" in part and SENSITIVE_NAME_RE.search(part.split("=", 1)[0]):
             key = part.split("=", 1)[0]
             safe_parts.append(f"{key}=<redacted>")
         else:
@@ -354,7 +355,7 @@ def validate_sha(value: str) -> str:
 
 
 def sanitized_build_env(user_home: str) -> dict[str, str]:
-    leaked = sorted(k for k in os.environ if SECRET_KEY_RE.search(k))
+    leaked = sorted(k for k in os.environ if SENSITIVE_NAME_RE.search(k))
     if leaked:
         raise ReleaseError("refusing ambient secret-bearing build environment keys")
     return {
@@ -913,10 +914,10 @@ def write_manifest(
 
 def parse_probe_output(output: str, *, sha: str) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for token in output.split():
-        if "=" not in token:
+    for field_assignment in output.split():
+        if "=" not in field_assignment:
             raise ReleaseError("keyless recovery probe emitted malformed output")
-        key, value = token.split("=", 1)
+        key, value = field_assignment.split("=", 1)
         if key not in PROBE_FIELDS:
             raise ReleaseError("keyless recovery probe emitted an unexpected field")
         if key in fields:
