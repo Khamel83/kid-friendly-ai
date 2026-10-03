@@ -15,7 +15,10 @@ scratch directory were removed in finally. No active app files/service,
 credentials, provider call or route changed.
 
 This live installed-generator check is separate from the unittest's independent
-literal fixture assertion. The final suite passes52 tests; the prior49-test
-candidate lacked three root-copy/presence/open-flag regression methods.
+literal fixture assertion. At the00:31 checkpoint the suite passed52 tests:
+the prior49-test candidate lacked three root-copy/presence/open-flag methods.
+Current code473069645f7b0660a6d1fa8e0031a1b9055345b3 passes54 tests with
+python3 -m unittest discover -s ops -p 'test_buddy*.py' -q. Two subsequent
+methods cover dependency-location mismatch and multi-chunk short reads.
 PR25 is the historical accepted operator. PR26 remains a source repair until
 its own exact-head trusted review/CI/merge and guarded prepare/install pass.
