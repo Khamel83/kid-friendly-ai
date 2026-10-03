@@ -816,6 +816,26 @@ def assert_prepare_git_state(
     )
 
 
+def inspect_prepare_git_state(
+    runtime: Runtime,
+    source: Path,
+    *,
+    env: Mapping[str, str],
+    sha: str,
+    default_branch: str,
+    allow_build_outputs: bool,
+) -> tuple[str, bool]:
+    return _translate_git_call(
+        release_git.inspect_prepare_git_state,
+        runtime,
+        source,
+        env=env,
+        sha=sha,
+        default_branch=default_branch,
+        allow_build_outputs=allow_build_outputs,
+    )
+
+
 isolated_git_env = release_git.isolated_git_env
 isolated_git_cmd = release_git.isolated_git_cmd
 
@@ -830,6 +850,14 @@ def parse_ls_tree(output: str) -> list[tuple[str, str, str, str]]:
 
 def validate_copied_release_against_git_tree(release_dir: Path, *, sha: str, runtime: Runtime) -> str:
     return _translate_git_call(release_git.validate_copied_release_against_git_tree, release_dir, sha=sha, runtime=runtime)
+
+
+def assert_copied_generated_next_env_declaration(copied_release: Path, *, expected_present: bool) -> None:
+    _translate_git_call(
+        release_git.assert_copied_generated_next_env_declaration,
+        copied_release,
+        expected_present=expected_present,
+    )
 
 
 def chmod_release_tree(root: Path, *, uid: int, gid: int, final_root: bool = True) -> None:
@@ -963,7 +991,14 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
             probe = parse_probe_output(probe_output, sha=sha)
             node_version = runtime.run_as_service_user([BIN["node"], "--version"], cwd=source, env=env, timeout=TIMEOUTS["git"])
             npm_version = runtime.run_as_service_user([BIN["npm"], "--version"], cwd=source, env=env, timeout=TIMEOUTS["git"])
-            actual = assert_prepare_git_state(runtime, source, env=env, sha=sha, default_branch=default_branch, allow_build_outputs=True)
+            actual, next_env_declaration_present = inspect_prepare_git_state(
+                runtime,
+                source,
+                env=env,
+                sha=sha,
+                default_branch=default_branch,
+                allow_build_outputs=True,
+            )
             root_stage.mkdir(mode=0o700)
             try:
                 os.chown(root_stage, config.root_uid, config.root_gid)
@@ -975,6 +1010,7 @@ def prepare_release(sha: str, runtime: Runtime) -> dict[str, object]:
             staged_release = root_stage / "release"
             shutil.copytree(source, staged_release, symlinks=True)
             root_verified_sha = validate_copied_release_against_git_tree(staged_release, sha=sha, runtime=runtime)
+            assert_copied_generated_next_env_declaration(staged_release, expected_present=next_env_declaration_present)
             shutil.rmtree(staged_release / ".git")
             fsync_dir(staged_release)
             chmod_release_tree(staged_release, uid=config.root_uid, gid=config.root_gid, final_root=False)

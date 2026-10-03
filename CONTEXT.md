@@ -1,10 +1,35 @@
 ## Current release preparation — October 2
 
+Final generated-file source candidate passes52 tests. The exact canonical
+Next14.0.4 declaration is checked both after build and after the root copy,
+before manifest/publication. Expected presence is preserved; races, unsafe
+leaves and unsupported safe-open flags refuse without publishing a release.
+Next: final independent/exact-head trusted review and Node CI, then repeat
+guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
+
+PR25 merged08ceda61 after trusted PASS on5b417ef8 and Node18/20 CI.
+Protected OCI operator capsule /opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e
+is root0555 with four root0444 modules; relative hash manifest SHAe7bc3f7b.
+Prepare's initial source check, npm build and keyless probe passed. Final
+source validation refused ignored generated next-env.d.ts; no app release
+published. Owned staging is empty, activePID1204/working directory unchanged.
+Repair is scoped to that generated declaration; no guard bypass is authorized.
+Local repair now fixes the canonical Next 14.0.4 declaration bytes and keeps
+the allowance after-build-only. The generated leaf is accepted only as a
+regular single-link file under 1024 bytes, opened with no-follow/nonblocking
+flags, and rechecked by named leaf identity plus size/mtime before and after a
+bounded read. Local unittest/compile/diff checks passed; no fetch, provider,
+runtime, secret, commit, push, or deployment action occurred, so source
+freshness was verified by parent fetch/default readback at08ceda61. Parent
+independently reran49 tests, compilation and diff checks. The new guard has no
+runtime effect yet; exact-head review/CI and prepare/install remain open.
+
 PR25 fixes the root-copy handoff race: independent copied Git/tree/blob/mode
 verification, full strict fsck, fixed Git config and manifest source binding.
 Exact-stage cleanup preserves published releases. Independent review/40 tests
 pass. Systemd255 environment flags and native unit modes are preserved.
-Final-head PASS/CI and OCI deployment remain open; runtime is unchanged.
+PR25 exact-head PASS/CI and merge are accepted. The generated-file repair and
+OCI app deployment remain open; runtime is unchanged.
 
 ## Recovery ownership
 

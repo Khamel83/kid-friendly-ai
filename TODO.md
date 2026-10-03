@@ -1,11 +1,27 @@
 <!-- janitor:begin:todo -->
+
+Final generated-file source candidate passes52 tests. The exact canonical
+Next14.0.4 declaration is checked both after build and after the root copy,
+before manifest/publication. Expected presence is preserved; races, unsafe
+leaves and unsupported safe-open flags refuse without publishing a release.
+Next: final independent/exact-head trusted review and Node CI, then repeat
+guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
 # Current work
+
+- [x] Merge PR25 as08ceda61 after exact5b417ef8 trusted PASS/Node18/20 CI.
+  The four-module root-owned operator capsule is installed on OCI.
+- [x] Repair the generated next-env.d.ts build-output gate locally: canonical
+  Next 14.0.4 bytes, after-build-only allowance, safe regular/single-link
+  bounded leaf read, and FIFO/replacement/mutation tests pass in 49-test suite.
+- [ ] Review/merge the generated-file guard repair, then repeat exact-source
+  prepare/install. The first prepare passed the keyless probe but refused
+  publication; servicePID1204/dirty checkout are unchanged.
 
 - [x] Prepare guarded Buddy-only release source: root copied-tree verification,
   manifest binding, exact failed-stage cleanup, native unit modes and
   systemd255 environment-file flags.40 tests/independent review pass.
-- [ ] Obtain final-head trusted PASS/Node18/20 CI, merge and run reviewed OCI
-  prepare/install; protected dirty checkout remains untouched.
+- [x] Obtain exact PR25 trusted PASS/Node18/20 CI and merge08ceda61.
+  The generated-file repair has its own final-head review/CI gate above.
 
 - [x] Reconcile the protected OCI app edits in reviewed source without resetting the active checkout: [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head review and Node 18/20 CI. The keyless exact-source Homelab drill passed home 200, memory=true, and invalid ask 400; health 503 reflects deliberately absent provider credentials. See [HANDOFF.md](HANDOFF.md).
 - [ ] Compare the exact reviewed release to the OCI running artifact and preserve the staged/unstaged patch before any active deployment. A Git HEAD alone is not parity evidence.

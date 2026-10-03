@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
+import json
 import os
 import re
 import stat
@@ -32,6 +34,16 @@ MINIMAL_GIT_CONFIG = b"""[core]
 """
 
 SOURCE_ENV_EXAMPLE_PATHS = {".env.example", ".env.docker.example", ".env.local.example"}
+NEXT_14_VERSION = "14.0.4"
+NEXT_ENV_DECLARATION_PATH = "next-env.d.ts"
+NEXT_ENV_DECLARATION_MAX_BYTES = 1024
+NEXT_14_0_4_NEXT_ENV_D_TS = (
+    b'/// <reference types="next" />\n'
+    b'/// <reference types="next/image-types/global" />\n'
+    b'\n'
+    b'// NOTE: This file should not be edited\n'
+    b'// see https://nextjs.org/docs/basic-features/typescript for more information.\n'
+)
 
 
 class GitVerificationError(RuntimeError):
@@ -342,7 +354,147 @@ def validate_source_env_policy(source_dir: Path, tracked_paths: Sequence[str] | 
             raise GitVerificationError(f"refusing source with local env file: {rel}")
 
 
-def assert_prepare_git_state(
+def load_json_file(path: Path, *, label: str) -> object:
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise GitVerificationError(f"generated next-env.d.ts requires {label}") from exc
+    except json.JSONDecodeError as exc:
+        raise GitVerificationError(f"generated next-env.d.ts requires valid {label}") from exc
+
+
+def mapping_value(data: object, key: str) -> object:
+    if isinstance(data, Mapping):
+        return data.get(key)
+    return None
+
+
+def source_has_locked_next14_declaration_inputs(source: Path) -> bool:
+    package_json = load_json_file(source / "package.json", label="package.json")
+    dependencies = mapping_value(package_json, "dependencies")
+    dev_dependencies = mapping_value(package_json, "devDependencies")
+    declared_next = None
+    if isinstance(dependencies, Mapping):
+        declared_next = dependencies.get("next")
+    if declared_next is None and isinstance(dev_dependencies, Mapping):
+        declared_next = dev_dependencies.get("next")
+
+    package_lock = load_json_file(source / "package-lock.json", label="package-lock.json")
+    packages = mapping_value(package_lock, "packages")
+    root_lock = mapping_value(packages, "") if isinstance(packages, Mapping) else None
+    root_dependencies = mapping_value(root_lock, "dependencies")
+    locked_next = root_dependencies.get("next") if isinstance(root_dependencies, Mapping) else None
+    next_package = mapping_value(packages, "node_modules/next") if isinstance(packages, Mapping) else None
+    locked_next_version = mapping_value(next_package, "version")
+
+    tsconfig = load_json_file(source / "tsconfig.json", label="tsconfig.json")
+    include = mapping_value(tsconfig, "include")
+    includes_next_env = isinstance(include, list) and NEXT_ENV_DECLARATION_PATH in include
+    return (
+        declared_next == NEXT_14_VERSION
+        and locked_next == NEXT_14_VERSION
+        and locked_next_version == NEXT_14_VERSION
+        and includes_next_env
+    )
+
+
+def next_env_leaf_state(st: os.stat_result) -> tuple[int, int, int, int]:
+    return (st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns)
+
+
+def assert_safe_next_env_leaf(st: os.stat_result) -> None:
+    if stat.S_ISLNK(st.st_mode):
+        raise GitVerificationError("generated next-env.d.ts is a symlink")
+    if not stat.S_ISREG(st.st_mode):
+        raise GitVerificationError("generated next-env.d.ts is not a regular file")
+    if st.st_nlink != 1:
+        raise GitVerificationError("generated next-env.d.ts must be single-link")
+    if st.st_size > NEXT_ENV_DECLARATION_MAX_BYTES:
+        raise GitVerificationError("generated next-env.d.ts is too large")
+
+
+def assert_same_next_env_leaf(expected: os.stat_result, actual: os.stat_result) -> None:
+    if next_env_leaf_state(expected) != next_env_leaf_state(actual):
+        raise GitVerificationError("generated next-env.d.ts changed during safe read")
+
+
+def validate_generated_next_env_declaration(source: Path) -> None:
+    if not source_has_locked_next14_declaration_inputs(source):
+        raise GitVerificationError("generated next-env.d.ts is not from the locked Next 14.0.4 source")
+    path = source / NEXT_ENV_DECLARATION_PATH
+    try:
+        before_name = path.lstat()
+    except FileNotFoundError as exc:
+        raise GitVerificationError("generated next-env.d.ts is missing") from exc
+    assert_safe_next_env_leaf(before_name)
+    flags = os.O_RDONLY | required_open_flag("O_NOFOLLOW") | required_open_flag("O_NONBLOCK")
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise GitVerificationError("generated next-env.d.ts is a symlink") from exc
+        raise GitVerificationError("generated next-env.d.ts cannot be opened safely") from exc
+    try:
+        before_fd = os.fstat(fd)
+        assert_safe_next_env_leaf(before_fd)
+        assert_same_next_env_leaf(before_name, before_fd)
+        data = os.read(fd, NEXT_ENV_DECLARATION_MAX_BYTES + 1)
+        after_fd = os.fstat(fd)
+        assert_safe_next_env_leaf(after_fd)
+        assert_same_next_env_leaf(before_fd, after_fd)
+        try:
+            after_name = path.lstat()
+        except FileNotFoundError as exc:
+            raise GitVerificationError("generated next-env.d.ts changed during safe read") from exc
+        assert_safe_next_env_leaf(after_name)
+        assert_same_next_env_leaf(before_fd, after_name)
+    finally:
+        os.close(fd)
+    if len(data) > NEXT_ENV_DECLARATION_MAX_BYTES:
+        raise GitVerificationError("generated next-env.d.ts is too large")
+    if data != NEXT_14_0_4_NEXT_ENV_D_TS:
+        raise GitVerificationError("generated next-env.d.ts does not match the Next 14.0.4 canonical declaration")
+
+
+def required_open_flag(name: str) -> int:
+    value = getattr(os, name, None)
+    if not isinstance(value, int) or value == 0:
+        raise GitVerificationError(f"generated next-env.d.ts requires {name} support")
+    return value
+
+
+def generated_next_env_declaration_present(source: Path) -> bool:
+    try:
+        (source / NEXT_ENV_DECLARATION_PATH).lstat()
+    except FileNotFoundError:
+        return False
+    return True
+
+
+def assert_copied_generated_next_env_declaration(copied_release: Path, *, expected_present: bool) -> None:
+    actual_present = generated_next_env_declaration_present(copied_release)
+    if actual_present != expected_present:
+        state = "missing" if expected_present else "unexpected"
+        raise GitVerificationError(f"generated next-env.d.ts is {state} in the root-copied release")
+    if actual_present:
+        validate_generated_next_env_declaration(copied_release)
+
+
+def source_has_untracked_next_env_declaration(runtime: RuntimeLike, source: Path, env: Mapping[str, str]) -> bool:
+    try:
+        (source / NEXT_ENV_DECLARATION_PATH).lstat()
+    except FileNotFoundError:
+        return False
+    tracked = runtime.run_as_service_user(
+        [BIN["git"], "ls-files", "--cached", "--", NEXT_ENV_DECLARATION_PATH],
+        cwd=source,
+        env=env,
+        timeout=TIMEOUTS["git"],
+    )
+    return NEXT_ENV_DECLARATION_PATH not in tracked.splitlines()
+
+
+def inspect_prepare_git_state(
     runtime: RuntimeLike,
     source: Path,
     *,
@@ -350,7 +502,7 @@ def assert_prepare_git_state(
     sha: str,
     default_branch: str,
     allow_build_outputs: bool,
-) -> str:
+) -> tuple[str, bool]:
     default_ref = runtime.run_as_service_user([BIN["git"], "symbolic-ref", "refs/remotes/origin/HEAD"], cwd=source, env=env, timeout=TIMEOUTS["git"])
     if default_ref.rsplit("/", 1)[-1] != default_branch:
         raise GitVerificationError("fetched default branch changed during prepare")
@@ -367,6 +519,8 @@ def assert_prepare_git_state(
         timeout=TIMEOUTS["git"],
     )
     unexpected: list[str] = []
+    next_env_status_seen = False
+    next_env_declaration_present = False
     for line in status.splitlines():
         if len(line) < 4:
             unexpected.append(line)
@@ -375,7 +529,38 @@ def assert_prepare_git_state(
         rel = line[3:]
         if allow_build_outputs and code == "!!" and (rel == ".next/" or rel.startswith(".next/") or rel == "node_modules/" or rel.startswith("node_modules/")):
             continue
+        if allow_build_outputs and code == "!!" and rel == NEXT_ENV_DECLARATION_PATH:
+            next_env_status_seen = True
+            next_env_declaration_present = True
+            validate_generated_next_env_declaration(source)
+            continue
         unexpected.append(line)
+    if not next_env_status_seen and source_has_untracked_next_env_declaration(runtime, source, env):
+        next_env_declaration_present = True
+        if allow_build_outputs:
+            validate_generated_next_env_declaration(source)
+        else:
+            unexpected.append(f"?? {NEXT_ENV_DECLARATION_PATH}")
     if unexpected:
         raise GitVerificationError("source checkout changed during prepare")
+    return head_sha, next_env_declaration_present
+
+
+def assert_prepare_git_state(
+    runtime: RuntimeLike,
+    source: Path,
+    *,
+    env: Mapping[str, str],
+    sha: str,
+    default_branch: str,
+    allow_build_outputs: bool,
+) -> str:
+    head_sha, _next_env_declaration_present = inspect_prepare_git_state(
+        runtime,
+        source,
+        env=env,
+        sha=sha,
+        default_branch=default_branch,
+        allow_build_outputs=allow_build_outputs,
+    )
     return head_sha

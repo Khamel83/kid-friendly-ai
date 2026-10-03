@@ -1,5 +1,33 @@
 # Current checkpoint — October 2
 
+Final generated-file source candidate passes52 tests. The exact canonical
+Next14.0.4 declaration is checked both after build and after the root copy,
+before manifest/publication. Expected presence is preserved; races, unsafe
+leaves and unsupported safe-open flags refuse without publishing a release.
+Next: final independent/exact-head trusted review and Node CI, then repeat
+guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
+
+PR25 merged08ceda61 after exact5b417ef8 PASS/Node CI. Four modules installed
+root-readonly under /opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e;
+hash manifest SHAe7bc3f7b independently checks. Guarded prepare passed build/
+keyless probe but refused generated ignored next-env.d.ts before publication.
+Owned staging is empty and activePID1204/working directory unchanged. Next:
+review narrow generated-file guard repair, then exact merged-source prepare
+and CAS install. Earlier final-review-pending text below describes PR25.
+Generated-file guard repair is now local only: Next 14.0.4 canonical
+next-env.d.ts bytes match the real five-line generator output, allowance stays
+after-build-only, other ignored output still refuses, and FIFO/replacement/
+mutation cases fail closed without unbounded reads. Verification: `python3 -m
+unittest discover -s ops -p 'test_buddy*.py' -v` ran 49 tests OK;
+`python3 -m py_compile ops/buddy_release_git.py
+ops/buddy_release_test_support.py ops/test_buddy_release_prepare.py
+ops/test_buddy_oci_release.py` passed; `git diff --check --
+ops/buddy_release_git.py ops/buddy_release_test_support.py
+ops/test_buddy_release_prepare.py` passed. No fetch/network/provider/runtime/
+secret/commit/push/deploy was performed by the worker. Parent fetched and
+verified default08ceda61 and independently reran49 tests/compile/diff. Next:
+exact-head review/CI for this narrow repair, then guarded prepare/install.
+
 PR25 source repairs pass40 tests and independent adversarial review. Root
 verifies copied Git/tree/blob/mode identity independently of the user index,
 uses full strict fsck and binds root_verified_sha in the manifest. Cleanup
