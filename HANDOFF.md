@@ -1,45 +1,33 @@
-# Current checkpoint — October 2
+# Current Buddy release state — October 3, 00:31 UTC
 
-Final generated-file source candidate passes52 tests. The exact canonical
-Next14.0.4 declaration is checked both after build and after the root copy,
-before manifest/publication. Expected presence is preserved; races, unsafe
-leaves and unsupported safe-open flags refuse without publishing a release.
-Next: final independent/exact-head trusted review and Node CI, then repeat
-guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
+PR26 is the current generated-file repair; its final exact-head trusted review
+remains open. Node18/20 CI passed for26a74a3. Independent production review
+passes, and parent `python3 -m unittest discover -s ops -p 'test_buddy*.py' -q`
+passes52 tests. This supersedes the earlier49-test candidate: three added
+methods cover root-copy mutation, copied presence mismatch and missing safe
+open flags. Compilation and diff checks pass.
 
-PR25 merged08ceda61 after exact5b417ef8 PASS/Node CI. Four modules installed
-root-readonly under /opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e;
-hash manifest SHAe7bc3f7b independently checks. Guarded prepare passed build/
-keyless probe but refused generated ignored next-env.d.ts before publication.
-Owned staging is empty and activePID1204/working directory unchanged. Next:
-review narrow generated-file guard repair, then exact merged-source prepare
-and CAS install. Earlier final-review-pending text below describes PR25.
-Generated-file guard repair is now local only: Next 14.0.4 canonical
-next-env.d.ts bytes match the real five-line generator output, allowance stays
-after-build-only, other ignored output still refuses, and FIFO/replacement/
-mutation cases fail closed without unbounded reads. Verification: `python3 -m
-unittest discover -s ops -p 'test_buddy*.py' -v` ran 49 tests OK;
-`python3 -m py_compile ops/buddy_release_git.py
-ops/buddy_release_test_support.py ops/test_buddy_release_prepare.py
-ops/test_buddy_oci_release.py` passed; `git diff --check --
-ops/buddy_release_git.py ops/buddy_release_test_support.py
-ops/test_buddy_release_prepare.py` passed. No fetch/network/provider/runtime/
-secret/commit/push/deploy was performed by the worker. Parent fetched and
-verified default08ceda61 and independently reran49 tests/compile/diff. Next:
-exact-head review/CI for this narrow repair, then guarded prepare/install.
+The exact Next14.0.4 declaration is validated after build and after root copy,
+before manifest/publication. Expected presence is preserved; other ignored
+files, unsafe leaves, unsupported safe-open flags and replacement races refuse.
+The unit test compares independent literal fixture bytes. Separately, parent
+executed the installed Next14.0.4 generator on OCI in private disposable scratch
+at00:31 UTC:201 output bytes matched SHA9269d492 exactly. Generator source hash
+48d0f69a is recorded in [the generator evidence](docs/NEXT_GENERATOR_EVIDENCE.md).
+No app files, provider, active service or route changed; scratch was removed.
 
-PR25 source repairs pass40 tests and independent adversarial review. Root
-verifies copied Git/tree/blob/mode identity independently of the user index,
-uses full strict fsck and binds root_verified_sha in the manifest. Cleanup
-removes only its exact unpublished stage; post-rename failure preserves the
-release. Systemd255 environment-file flags survive receipt/rollback checks.
-Include four production files: buddy_oci_release.py, buddy_release_primitives.py,
-buddy_release_git.py, buddy_release_state.py. Final-head trusted PASS/Node CI
-and OCI deployment remain open; protected dirty checkouts and service unchanged.
+Historical PR25 is accepted: merge08ceda61 after exact5b417ef8 trusted PASS
+and Node18/20 CI, with the four-module root-readonly operator installed under
+/opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e/ops/.
+Its hash manifest SHAe7bc3f7b matches all four modules. Prepare passed build and
+keyless probe, then refused generated next-env.d.ts before publication.
+Owned staging is empty; activePID1204 and the protected dirty checkout remain.
+Those PR25 gates do not imply PR26 review, merged source or app installation.
 
-Recheck: python3 -m unittest discover -s ops -p 'test_buddy*.py' -v.
-Next: reviewed merge, exact fetched-source prepare, then guarded install with
-beforeimage expectations. [Operator contract](docs/RECOVERY.md#bounded-oci-release-helper).
+Next: trusted PASS and CI for the final PR26 head, merge, stage all four exact
+merged production modules, run guarded prepare and independently verify its
+manifest/probe, then CAS install and check Buddy-only runtime/health.
+[Operator contract](docs/RECOVERY.md#bounded-oci-release-helper).
 
 ## Historical September 29 checkpoint
 

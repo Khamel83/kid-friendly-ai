@@ -12,7 +12,8 @@ guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
   The four-module root-owned operator capsule is installed on OCI.
 - [x] Repair the generated next-env.d.ts build-output gate locally: canonical
   Next 14.0.4 bytes, after-build-only allowance, safe regular/single-link
-  bounded leaf read, and FIFO/replacement/mutation tests pass in 49-test suite.
+  bounded leaf read and root-copy revalidation pass in the final52-test suite.
+  Earlier49 tests preceded three copied-file/open-flag regression methods.
 - [ ] Review/merge the generated-file guard repair, then repeat exact-source
   prepare/install. The first prepare passed the keyless probe but refused
   publication; servicePID1204/dirty checkout are unchanged.
