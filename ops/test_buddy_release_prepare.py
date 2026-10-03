@@ -127,6 +127,48 @@ class SourceAndManifestTests(unittest.TestCase):
                 sha,
             )
 
+    def test_prepare_git_state_requires_next14_dependency_in_package_and_lock_dependencies(self):
+        cases = {
+            "package_json_dev_dependency": (
+                {"devDependencies": {"next": "14.0.4"}},
+                {
+                    "lockfileVersion": 3,
+                    "packages": {
+                        "": {"dependencies": {"next": "14.0.4"}},
+                        "node_modules/next": {"version": "14.0.4"},
+                    },
+                },
+            ),
+            "package_lock_dev_dependency": (
+                {"dependencies": {"next": "14.0.4"}},
+                {
+                    "lockfileVersion": 3,
+                    "packages": {
+                        "": {"devDependencies": {"next": "14.0.4"}},
+                        "node_modules/next": {"version": "14.0.4"},
+                    },
+                },
+            ),
+        }
+        for name, (package_json, package_lock) in cases.items():
+            with self.subTest(name=name):
+                with temp_path() as tmp:
+                    source, sha = make_git_state_source(tmp)
+                    write_file(source / "package.json", json.dumps(package_json, sort_keys=True) + "\n", 0o644)
+                    write_file(source / "package-lock.json", json.dumps(package_lock, sort_keys=True) + "\n", 0o644)
+                    write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+                    env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+                    with self.assertRaisesRegex(buddy.ReleaseError, "locked Next 14\\.0\\.4"):
+                        primitives.assert_prepare_git_state(
+                            GitStateRuntime(),
+                            source,
+                            env=env,
+                            sha=sha,
+                            default_branch="main",
+                            allow_build_outputs=True,
+                        )
+
     def test_prepare_git_state_accepts_absent_next_env_after_build(self):
         with temp_path() as tmp:
             source, sha = make_git_state_source(tmp)
@@ -196,6 +238,39 @@ class SourceAndManifestTests(unittest.TestCase):
             self.assertEqual(len(seen_flags), 1)
             self.assertTrue(seen_flags[0] & getattr(os, "O_NOFOLLOW", 0))
             self.assertTrue(seen_flags[0] & getattr(os, "O_NONBLOCK", 0))
+
+    def test_prepare_git_state_accepts_next_env_read_in_multiple_short_chunks(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            generated = source / "next-env.d.ts"
+            write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            real_read = os.read
+            target = generated.lstat()
+            chunk_lengths = []
+
+            def short_read(fd, length):
+                fd_state = os.fstat(fd)
+                if (fd_state.st_dev, fd_state.st_ino) == (target.st_dev, target.st_ino) and length > 8:
+                    length = 8
+                data = real_read(fd, length)
+                if (fd_state.st_dev, fd_state.st_ino) == (target.st_dev, target.st_ino):
+                    chunk_lengths.append(len(data))
+                return data
+
+            with mock.patch.object(primitives.os, "read", side_effect=short_read):
+                self.assertEqual(
+                    primitives.assert_prepare_git_state(
+                        GitStateRuntime(),
+                        source,
+                        env=env,
+                        sha=sha,
+                        default_branch="main",
+                        allow_build_outputs=True,
+                    ),
+                    sha,
+                )
+            self.assertGreater(len([length for length in chunk_lengths if length]), 1)
 
     def test_prepare_git_state_fails_closed_without_required_next_env_open_flags(self):
         for flag_name in ["O_NOFOLLOW", "O_NONBLOCK"]:

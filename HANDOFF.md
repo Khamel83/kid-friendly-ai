@@ -1,20 +1,25 @@
 # Current Buddy release state — October 3, 00:31 UTC
 
 PR26 is the current generated-file repair; its final exact-head trusted review
-remains open. Node18/20 CI passed for26a74a3. Independent production review
-passes, and parent `python3 -m unittest discover -s ops -p 'test_buddy*.py' -q`
-passes52 tests. This supersedes the earlier49-test candidate: three added
-methods cover root-copy mutation, copied presence mismatch and missing safe
-open flags. Compilation and diff checks pass.
+remains open. Node18/20 CI passed for26a74a3, but current local source now
+includes post-review fixes for the generated-file guard. Local
+`python3 -m unittest discover -s ops -p 'test_buddy*.py' -q` passes54 tests,
+and `python3 -m py_compile ops/buddy_release_git.py
+ops/test_buddy_release_prepare.py ops/buddy_release_test_support.py` passes.
+The latest two regressions cover dependency-location mismatch refusal and
+multi-chunk short reads; earlier added methods cover root-copy mutation, copied
+presence mismatch and missing safe open flags. Compilation and diff checks pass.
 
 The exact Next14.0.4 declaration is validated after build and after root copy,
-before manifest/publication. Expected presence is preserved; other ignored
-files, unsafe leaves, unsupported safe-open flags and replacement races refuse.
-The unit test compares independent literal fixture bytes. Separately, parent
-executed the installed Next14.0.4 generator on OCI in private disposable scratch
-at00:31 UTC:201 output bytes matched SHA9269d492 exactly. Generator source hash
-48d0f69a is recorded in [the generator evidence](docs/NEXT_GENERATOR_EVIDENCE.md).
-No app files, provider, active service or route changed; scratch was removed.
+before manifest/publication. The guard now requires Next14.0.4 in dependencies
+in both package.json and the package-lock root; devDependencies are not accepted
+as fallback. Expected presence is preserved; other ignored files, unsafe leaves,
+unsupported safe-open flags and replacement races refuse. The unit test compares
+independent literal fixture bytes. Separately, parent executed the installed
+Next14.0.4 generator on OCI in private disposable scratch at00:31 UTC:201 output
+bytes matched SHA9269d492 exactly. Generator source hash48d0f69a is recorded in
+[the generator evidence](docs/NEXT_GENERATOR_EVIDENCE.md). No app files,
+provider, active service or route changed; scratch was removed.
 
 Historical PR25 is accepted: merge08ceda61 after exact5b417ef8 trusted PASS
 and Node18/20 CI, with the four-module root-readonly operator installed under

@@ -1,19 +1,25 @@
 <!-- janitor:begin:todo -->
 
-Final generated-file source candidate passes52 tests. The exact canonical
-Next14.0.4 declaration is checked both after build and after the root copy,
-before manifest/publication. Expected presence is preserved; races, unsafe
-leaves and unsupported safe-open flags refuse without publishing a release.
-Next: final independent/exact-head trusted review and Node CI, then repeat
-guarded prepare/install. Existing servicePID1204 and dirty checkout remain.
+Local generated-file source candidate passes54 ops tests after PR26 review
+findings: generated next-env.d.ts now requires Next14.0.4 in dependencies in
+both package.json and the package-lock root, and its bounded reader tolerates
+short reads while retaining the1024-byte refusal. The exact canonical
+Next14.0.4 declaration is still checked both after build and after the root
+copy, before manifest/publication. Expected presence is preserved; races,
+unsafe leaves and unsupported safe-open flags refuse without publishing a
+release. Next: final independent/exact-head trusted review and Node CI, then
+repeat guarded prepare/install. Existing servicePID1204 and dirty checkout
+remain.
 # Current work
 
 - [x] Merge PR25 as08ceda61 after exact5b417ef8 trusted PASS/Node18/20 CI.
   The four-module root-owned operator capsule is installed on OCI.
 - [x] Repair the generated next-env.d.ts build-output gate locally: canonical
   Next 14.0.4 bytes, after-build-only allowance, safe regular/single-link
-  bounded leaf read and root-copy revalidation pass in the final52-test suite.
-  Earlier49 tests preceded three copied-file/open-flag regression methods.
+  bounded leaf read and root-copy revalidation pass in the final54-test ops
+  suite. Earlier49 tests preceded three copied-file/open-flag regression
+  methods; two latest regressions cover dependency-location mismatch refusal
+  and multi-chunk short reads.
 - [ ] Review/merge the generated-file guard repair, then repeat exact-source
   prepare/install. The first prepare passed the keyless probe but refused
   publication; servicePID1204/dirty checkout are unchanged.

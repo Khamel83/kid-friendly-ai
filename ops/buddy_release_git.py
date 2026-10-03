@@ -372,12 +372,7 @@ def mapping_value(data: object, key: str) -> object:
 def source_has_locked_next14_declaration_inputs(source: Path) -> bool:
     package_json = load_json_file(source / "package.json", label="package.json")
     dependencies = mapping_value(package_json, "dependencies")
-    dev_dependencies = mapping_value(package_json, "devDependencies")
-    declared_next = None
-    if isinstance(dependencies, Mapping):
-        declared_next = dependencies.get("next")
-    if declared_next is None and isinstance(dev_dependencies, Mapping):
-        declared_next = dev_dependencies.get("next")
+    declared_next = dependencies.get("next") if isinstance(dependencies, Mapping) else None
 
     package_lock = load_json_file(source / "package-lock.json", label="package-lock.json")
     packages = mapping_value(package_lock, "packages")
@@ -418,6 +413,18 @@ def assert_same_next_env_leaf(expected: os.stat_result, actual: os.stat_result) 
         raise GitVerificationError("generated next-env.d.ts changed during safe read")
 
 
+def read_bounded_next_env_declaration(fd: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = NEXT_ENV_DECLARATION_MAX_BYTES + 1
+    while remaining > 0:
+        chunk = os.read(fd, remaining)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def validate_generated_next_env_declaration(source: Path) -> None:
     if not source_has_locked_next14_declaration_inputs(source):
         raise GitVerificationError("generated next-env.d.ts is not from the locked Next 14.0.4 source")
@@ -438,7 +445,7 @@ def validate_generated_next_env_declaration(source: Path) -> None:
         before_fd = os.fstat(fd)
         assert_safe_next_env_leaf(before_fd)
         assert_same_next_env_leaf(before_name, before_fd)
-        data = os.read(fd, NEXT_ENV_DECLARATION_MAX_BYTES + 1)
+        data = read_bounded_next_env_declaration(fd)
         after_fd = os.fstat(fd)
         assert_safe_next_env_leaf(after_fd)
         assert_same_next_env_leaf(before_fd, after_fd)
