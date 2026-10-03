@@ -11,6 +11,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from buddy_release_test_support import *
 
 class SourceAndManifestTests(unittest.TestCase):
+    def test_next14_declaration_constant_matches_actual_generator_output_literal(self):
+        real_next14_output = (
+            b'/// <reference types="next" />\n'
+            b'/// <reference types="next/image-types/global" />\n'
+            b'\n'
+            b'// NOTE: This file should not be edited\n'
+            b'// see https://nextjs.org/docs/basic-features/typescript for more information.\n'
+        )
+
+        self.assertEqual(primitives.release_git.NEXT_14_0_4_NEXT_ENV_D_TS, real_next14_output)
+        self.assertEqual(NEXT_14_0_4_NEXT_ENV_D_TS, real_next14_output)
+
     def test_env_policy_allows_only_reviewed_examples_and_dependency_fixtures(self):
         with temp_path() as tmp:
             source = tmp / "source"
@@ -86,6 +98,305 @@ class SourceAndManifestTests(unittest.TestCase):
                 with self.assertRaisesRegex(buddy.ReleaseError, "source checkout changed"):
                     buddy.prepare_release(GOOD_SHA, runtime)
             self.assertEqual(list(config.release_root.glob(GOOD_SHA)), [])
+
+    def test_prepare_git_state_accepts_real_ignored_next_env_after_build_only(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            runtime = GitStateRuntime()
+
+            with self.assertRaisesRegex(buddy.ReleaseError, "source checkout changed"):
+                primitives.assert_prepare_git_state(
+                    runtime,
+                    source,
+                    env=env,
+                    sha=sha,
+                    default_branch="main",
+                    allow_build_outputs=False,
+                )
+            self.assertEqual(
+                primitives.assert_prepare_git_state(
+                    runtime,
+                    source,
+                    env=env,
+                    sha=sha,
+                    default_branch="main",
+                    allow_build_outputs=True,
+                ),
+                sha,
+            )
+
+    def test_prepare_git_state_requires_next14_dependency_in_package_and_lock_dependencies(self):
+        cases = {
+            "package_json_dev_dependency": (
+                {"devDependencies": {"next": "14.0.4"}},
+                {
+                    "lockfileVersion": 3,
+                    "packages": {
+                        "": {"dependencies": {"next": "14.0.4"}},
+                        "node_modules/next": {"version": "14.0.4"},
+                    },
+                },
+            ),
+            "package_lock_dev_dependency": (
+                {"dependencies": {"next": "14.0.4"}},
+                {
+                    "lockfileVersion": 3,
+                    "packages": {
+                        "": {"devDependencies": {"next": "14.0.4"}},
+                        "node_modules/next": {"version": "14.0.4"},
+                    },
+                },
+            ),
+        }
+        for name, (package_json, package_lock) in cases.items():
+            with self.subTest(name=name):
+                with temp_path() as tmp:
+                    source, sha = make_git_state_source(tmp)
+                    write_file(source / "package.json", json.dumps(package_json, sort_keys=True) + "\n", 0o644)
+                    write_file(source / "package-lock.json", json.dumps(package_lock, sort_keys=True) + "\n", 0o644)
+                    write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+                    env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+                    with self.assertRaisesRegex(buddy.ReleaseError, "locked Next 14\\.0\\.4"):
+                        primitives.assert_prepare_git_state(
+                            GitStateRuntime(),
+                            source,
+                            env=env,
+                            sha=sha,
+                            default_branch="main",
+                            allow_build_outputs=True,
+                        )
+
+    def test_prepare_git_state_accepts_absent_next_env_after_build(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+            self.assertEqual(
+                primitives.assert_prepare_git_state(
+                    GitStateRuntime(),
+                    source,
+                    env=env,
+                    sha=sha,
+                    default_branch="main",
+                    allow_build_outputs=True,
+                ),
+                sha,
+            )
+
+    def test_prepare_git_state_rejects_malformed_ignored_next_env(self):
+        cases = [
+            b"declare const anything: string;\n",
+            b"OPENAI_API_KEY=sk-test\n",
+            NEXT_14_0_4_NEXT_ENV_D_TS + b"declare const extra: string;\n",
+        ]
+        for data in cases:
+            with self.subTest(data=data[:24]):
+                with temp_path() as tmp:
+                    source, sha = make_git_state_source(tmp)
+                    write_file(source / "next-env.d.ts", data, 0o644)
+                    env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+                    with self.assertRaisesRegex(buddy.ReleaseError, "next-env\\.d\\.ts"):
+                        primitives.assert_prepare_git_state(
+                            GitStateRuntime(),
+                            source,
+                            env=env,
+                            sha=sha,
+                            default_branch="main",
+                            allow_build_outputs=True,
+                        )
+
+    def test_prepare_git_state_opens_next_env_with_nofollow_nonblock(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            generated = source / "next-env.d.ts"
+            write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            seen_flags = []
+            real_open = os.open
+
+            def capture_open(path, flags, *args, **kwargs):
+                if Path(path) == generated:
+                    seen_flags.append(flags)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(primitives.os, "open", side_effect=capture_open):
+                self.assertEqual(
+                    primitives.assert_prepare_git_state(
+                        GitStateRuntime(),
+                        source,
+                        env=env,
+                        sha=sha,
+                        default_branch="main",
+                        allow_build_outputs=True,
+                    ),
+                    sha,
+                )
+            self.assertEqual(len(seen_flags), 1)
+            self.assertTrue(seen_flags[0] & getattr(os, "O_NOFOLLOW", 0))
+            self.assertTrue(seen_flags[0] & getattr(os, "O_NONBLOCK", 0))
+
+    def test_prepare_git_state_accepts_next_env_read_in_multiple_short_chunks(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            generated = source / "next-env.d.ts"
+            write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            real_read = os.read
+            target = generated.lstat()
+            chunk_lengths = []
+
+            def short_read(fd, length):
+                fd_state = os.fstat(fd)
+                if (fd_state.st_dev, fd_state.st_ino) == (target.st_dev, target.st_ino) and length > 8:
+                    length = 8
+                data = real_read(fd, length)
+                if (fd_state.st_dev, fd_state.st_ino) == (target.st_dev, target.st_ino):
+                    chunk_lengths.append(len(data))
+                return data
+
+            with mock.patch.object(primitives.os, "read", side_effect=short_read):
+                self.assertEqual(
+                    primitives.assert_prepare_git_state(
+                        GitStateRuntime(),
+                        source,
+                        env=env,
+                        sha=sha,
+                        default_branch="main",
+                        allow_build_outputs=True,
+                    ),
+                    sha,
+                )
+            self.assertGreater(len([length for length in chunk_lengths if length]), 1)
+
+    def test_prepare_git_state_fails_closed_without_required_next_env_open_flags(self):
+        for flag_name in ["O_NOFOLLOW", "O_NONBLOCK"]:
+            with self.subTest(flag_name=flag_name):
+                with temp_path() as tmp:
+                    source, sha = make_git_state_source(tmp)
+                    write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+                    env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+                    with mock.patch.object(primitives.release_git.os, flag_name, 0):
+                        with self.assertRaisesRegex(buddy.ReleaseError, flag_name):
+                            primitives.assert_prepare_git_state(
+                                GitStateRuntime(),
+                                source,
+                                env=env,
+                                sha=sha,
+                                default_branch="main",
+                                allow_build_outputs=True,
+                            )
+
+    def test_prepare_git_state_rejects_unsafe_ignored_next_env_file_types(self):
+        cases = ["symlink", "hardlink", "fifo", "oversized"]
+        for case in cases:
+            with self.subTest(case=case):
+                with temp_path() as tmp:
+                    source, sha = make_git_state_source(tmp)
+                    generated = source / "next-env.d.ts"
+                    if case == "symlink":
+                        generated.symlink_to("package.json")
+                        pattern = "symlink"
+                    elif case == "hardlink":
+                        os.link(source / "package.json", generated)
+                        pattern = "single-link"
+                    elif case == "fifo":
+                        os.mkfifo(generated, 0o600)
+                        pattern = "regular file"
+                    else:
+                        write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS + (b"x" * 4096), 0o644)
+                        pattern = "too large"
+                    env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+                    with self.assertRaisesRegex(buddy.ReleaseError, pattern):
+                        primitives.assert_prepare_git_state(
+                            GitStateRuntime(),
+                            source,
+                            env=env,
+                            sha=sha,
+                            default_branch="main",
+                            allow_build_outputs=True,
+                        )
+
+    def test_prepare_git_state_rejects_replaced_next_env_leaf_during_safe_open(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            generated = source / "next-env.d.ts"
+            write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            real_open = os.open
+            replaced = False
+
+            def replace_before_open(path, flags, *args, **kwargs):
+                nonlocal replaced
+                if Path(path) == generated and not replaced:
+                    replaced = True
+                    generated.rename(source / "next-env.d.ts.old")
+                    write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+                return real_open(path, flags, *args, **kwargs)
+
+            with mock.patch.object(primitives.os, "open", side_effect=replace_before_open):
+                with self.assertRaisesRegex(buddy.ReleaseError, "changed during safe read"):
+                    primitives.assert_prepare_git_state(
+                        GitStateRuntime(),
+                        source,
+                        env=env,
+                        sha=sha,
+                        default_branch="main",
+                        allow_build_outputs=True,
+                    )
+
+    def test_prepare_git_state_rejects_mutated_next_env_leaf_during_safe_read(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            generated = source / "next-env.d.ts"
+            write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+            real_read = os.read
+            target = generated.lstat()
+            mutated = False
+
+            def mutate_after_read(fd, length):
+                nonlocal mutated
+                data = real_read(fd, length)
+                fd_state = os.fstat(fd)
+                if not mutated and (fd_state.st_dev, fd_state.st_ino) == (target.st_dev, target.st_ino):
+                    mutated = True
+                    write_file(generated, NEXT_14_0_4_NEXT_ENV_D_TS + b"// changed\n", 0o644)
+                return data
+
+            with mock.patch.object(primitives.os, "read", side_effect=mutate_after_read):
+                with self.assertRaisesRegex(buddy.ReleaseError, "changed during safe read"):
+                    primitives.assert_prepare_git_state(
+                        GitStateRuntime(),
+                        source,
+                        env=env,
+                        sha=sha,
+                        default_branch="main",
+                        allow_build_outputs=True,
+                    )
+
+    def test_prepare_git_state_rejects_unrelated_ignored_build_artifact(self):
+        with temp_path() as tmp:
+            source, sha = make_git_state_source(tmp)
+            write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            mkdir(source / "out", 0o755)
+            write_file(source / "out" / "index.html", "<html></html>\n", 0o644)
+            env = {"HOME": str(tmp), "PATH": "/usr/bin:/bin"}
+
+            with self.assertRaisesRegex(buddy.ReleaseError, "source checkout changed"):
+                primitives.assert_prepare_git_state(
+                    GitStateRuntime(),
+                    source,
+                    env=env,
+                    sha=sha,
+                    default_branch="main",
+                    allow_build_outputs=True,
+                )
 
     def test_root_verified_copy_rejects_tracked_mutation_independent_of_index(self):
         with temp_path() as tmp:
@@ -193,6 +504,67 @@ class SourceAndManifestTests(unittest.TestCase):
                     buddy.prepare_release(sha, runtime)
             self.assertFalse((config.release_root / sha).exists())
             self.assertEqual(list(config.staging_root.glob(f"{sha}.*.root")), [])
+
+    def test_prepare_rejects_next_env_mutation_during_root_copy_without_publication(self):
+        with temp_path() as tmp:
+            root = tmp
+            config = make_config(root)
+            active_app = config.source_env.parent
+            write_file(active_app / "active-app-marker.txt", "untouched\n", 0o644)
+            source_repo, _old_sha = make_git_state_source(root)
+            mkdir(source_repo / "ops", 0o755)
+            write_file(source_repo / "ops" / "recovery-probe.sh", "#!/usr/bin/env bash\n", 0o755)
+            git(source_repo, "add", ".")
+            git(source_repo, "commit", "-m", "add probe")
+            sha = git(source_repo, "rev-parse", "HEAD")
+            git(source_repo, "update-ref", "refs/remotes/origin/main", sha)
+
+            def build_next14_output(cwd):
+                mkdir(cwd / ".next", 0o755)
+                write_file(cwd / ".next" / "BUILD_ID", "build-1\n", 0o644)
+                write_file(cwd / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+
+            fake_run_as_user = PrepareRunAsUser(sha=sha, source_repo=source_repo, build=build_next14_output)
+            real_copytree = shutil.copytree
+
+            def mutating_copytree(src, dst, *args, **kwargs):
+                result = real_copytree(src, dst, *args, **kwargs)
+                if Path(dst).name == "release":
+                    write_file(Path(dst) / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS + b"// changed\n", 0o644)
+                return result
+
+            runtime = buddy.Runtime(config, euid=lambda: 0)
+            with prepare_patches(
+                runtime,
+                fake_run_as_user,
+                root,
+                mock.patch.object(shutil, "copytree", side_effect=mutating_copytree),
+            ):
+                with self.assertRaisesRegex(buddy.ReleaseError, "next-env\\.d\\.ts"):
+                    buddy.prepare_release(sha, runtime)
+            self.assertFalse((config.release_root / sha).exists())
+            self.assertEqual(list(config.staging_root.glob(f"{sha}.*.root")), [])
+            self.assertEqual((active_app / "active-app-marker.txt").read_text(), "untouched\n")
+
+    def test_copied_next_env_presence_must_match_source_expectation(self):
+        with temp_path() as tmp:
+            source, _sha = make_git_state_source(tmp)
+            copied = tmp / "copied"
+            shutil.copytree(source, copied, symlinks=True)
+            write_file(copied / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+
+            with self.assertRaisesRegex(buddy.ReleaseError, "unexpected"):
+                primitives.assert_copied_generated_next_env_declaration(copied, expected_present=False)
+
+        with temp_path() as tmp:
+            source, _sha = make_git_state_source(tmp)
+            write_file(source / "next-env.d.ts", NEXT_14_0_4_NEXT_ENV_D_TS, 0o644)
+            copied = tmp / "copied"
+            shutil.copytree(source, copied, symlinks=True)
+            (copied / "next-env.d.ts").unlink()
+
+            with self.assertRaisesRegex(buddy.ReleaseError, "missing"):
+                primitives.assert_copied_generated_next_env_declaration(copied, expected_present=True)
 
     def test_prepare_prerename_failure_cleans_only_exact_root_stage(self):
         with temp_path() as tmp:

@@ -20,6 +20,13 @@ SPEC.loader.exec_module(buddy)
 primitives = sys.modules["buddy_release_primitives"]
 
 GOOD_SHA = "b99eb89680419876345d2d76131e453202455b17"
+NEXT_14_0_4_NEXT_ENV_D_TS = (
+    b'/// <reference types="next" />\n'
+    b'/// <reference types="next/image-types/global" />\n'
+    b'\n'
+    b'// NOTE: This file should not be edited\n'
+    b'// see https://nextjs.org/docs/basic-features/typescript for more information.\n'
+)
 BASELINE_503_MEMORY_FALSE = {
     "home_status": 200,
     "health_status": 503,
@@ -223,6 +230,59 @@ def make_git_source(root, *, executable=True, symlink=False):
     git(repo, "add", ".")
     git(repo, "commit", "-m", "initial")
     return repo, git(repo, "rev-parse", "HEAD")
+
+def write_next14_project_files(repo):
+    write_file(repo / ".gitignore", "/.next/\n/node_modules\n/out/\nnext-env.d.ts\n", 0o644)
+    write_file(repo / "package.json", json.dumps({"dependencies": {"next": "14.0.4"}}, sort_keys=True) + "\n", 0o644)
+    write_file(
+        repo / "package-lock.json",
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "": {"dependencies": {"next": "14.0.4"}},
+                    "node_modules/next": {"version": "14.0.4"},
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        0o644,
+    )
+    write_file(repo / "tsconfig.json", json.dumps({"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"]}) + "\n", 0o644)
+
+def make_git_state_source(root):
+    repo = root / "repo"
+    mkdir(repo, 0o755)
+    git(repo, "init")
+    git(repo, "config", "user.name", "Test User")
+    git(repo, "config", "user.email", "test@example.invalid")
+    write_next14_project_files(repo)
+    git(repo, "add", ".")
+    git(repo, "commit", "-m", "initial")
+    sha = git(repo, "rev-parse", "HEAD")
+    git(repo, "update-ref", "refs/remotes/origin/main", sha)
+    git(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+    return repo, sha
+
+class GitStateRuntime:
+    def run(self, *args, **kwargs):
+        raise AssertionError("assert_prepare_git_state should use run_as_service_user")
+
+    def run_as_service_user(self, cmd, *, cwd, env, timeout):
+        proc = subprocess.run(
+            list(cmd),
+            cwd=cwd,
+            env=dict(env),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=timeout,
+        )
+        if proc.returncode != 0:
+            raise AssertionError(f"{Path(cmd[0]).name} {' '.join(cmd[1:])} failed: {proc.stderr}")
+        return (proc.stdout or "").strip()
 
 def loose_object_path(repo, object_id):
     return repo / ".git" / "objects" / object_id[:2] / object_id[2:]

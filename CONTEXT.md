@@ -1,10 +1,38 @@
-## Current release preparation — October 2
+# Current Buddy release state — October 3, 00:31 UTC
 
-PR25 fixes the root-copy handoff race: independent copied Git/tree/blob/mode
-verification, full strict fsck, fixed Git config and manifest source binding.
-Exact-stage cleanup preserves published releases. Independent review/40 tests
-pass. Systemd255 environment flags and native unit modes are preserved.
-Final-head PASS/CI and OCI deployment remain open; runtime is unchanged.
+PR26 is the current generated-file repair; its final exact-head trusted review
+remains open. Node18/20 CI passed for26a74a3, but current local source now
+includes post-review fixes for the generated-file guard. Local
+`python3 -m unittest discover -s ops -p 'test_buddy*.py' -q` passes54 tests,
+and `python3 -m py_compile ops/buddy_release_git.py
+ops/test_buddy_release_prepare.py ops/buddy_release_test_support.py` passes.
+The latest two regressions cover dependency-location mismatch refusal and
+multi-chunk short reads; earlier added methods cover root-copy mutation, copied
+presence mismatch and missing safe open flags. Diff check passes.
+
+The exact Next14.0.4 declaration is validated after build and after root copy,
+before manifest/publication. The guard now requires Next14.0.4 in dependencies
+in both package.json and the package-lock root; devDependencies are not accepted
+as fallback. Expected presence is preserved; other ignored files, unsafe leaves,
+unsupported safe-open flags and replacement races refuse. The unit test compares
+independent literal fixture bytes. Separately, parent executed the installed
+Next14.0.4 generator on OCI in private disposable scratch at00:31 UTC:201 output
+bytes matched SHA9269d492 exactly. Generator source hash48d0f69a is recorded in
+[the generator evidence](docs/NEXT_GENERATOR_EVIDENCE.md). No app files,
+provider, active service or route changed; scratch was removed.
+
+Historical PR25 is accepted: merge08ceda61 after exact5b417ef8 trusted PASS
+and Node18/20 CI, with the four-module root-readonly operator installed under
+/opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e/ops/.
+Its hash manifest SHAe7bc3f7b matches all four modules. Prepare passed build and
+keyless probe, then refused generated next-env.d.ts before publication.
+Owned staging is empty; activePID1204 and the protected dirty checkout remain.
+Those PR25 gates do not imply PR26 review, merged source or app installation.
+
+Next: trusted PASS and CI for the final PR26 head, merge, stage all four exact
+merged production modules, run guarded prepare and independently verify its
+manifest/probe, then CAS install and check Buddy-only runtime/health.
+[Operator contract](docs/RECOVERY.md#bounded-oci-release-helper).
 
 ## Recovery ownership
 
