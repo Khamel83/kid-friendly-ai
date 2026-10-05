@@ -17,3 +17,16 @@ Prepare refused before app publication; active `buddy.service` is unchanged.
 - The app has no server-side database or durable file state in the inspected API routes. Browser preferences use client local storage. Verify this again if routes change.
 - Production provider configuration is local to its host. Do not print or copy credential values into this repository or a recovery receipt.
 - The public route, active OCI writer, and failback remain unchanged until the Homelab recovery contract's service gates pass.
+<!-- janitor:begin:catalog -->
+## Repository identity
+Infrastructure authority: `Khamel83/infra:config/project-catalog.yml`.
+This INFRA.md is this project's projection of that authority. The owning
+project declares its deploy, config, data and health evidence here;
+shared machine/tool/environment policy stays in infra's registries.
+- project_id: kid-friendly-ai
+- name: Kid Friendly AI
+- state: observing
+- lifecycle: active
+- classification: unclassified
+- repository: https://github.com/Khamel83/kid-friendly-ai
+<!-- janitor:end:catalog -->
