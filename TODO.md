@@ -2,7 +2,9 @@
 - [x] 2026-10-05: Repair PR #29's managed merge rule to require the latest
   trusted, non-dismissed OCI reviewer Bot PASS for the exact current commit;
   stale, superseded or contradictory PASS does not qualify. This is a
-  source-only documentation repair with no runtime or downstream effect.
+  source-only documentation repair; no runtime, provider, or deployment
+  operation was performed by this repair, and downstream effect remains to be
+  verified separately.
 Local generated-file source candidate passes54 ops tests after PR26 review
 findings: generated next-env.d.ts now requires Next14.0.4 in dependencies in
 both package.json and the package-lock root, and its bounded reader tolerates

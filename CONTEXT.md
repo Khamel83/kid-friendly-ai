@@ -48,8 +48,9 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 - 2026-10-05 source-only managed-rule repair for PR [#29](https://github.com/Khamel83/kid-friendly-ai/pull/29) started from candidate
   `7a89622027db8c8268cd76bcd55b8ab90a375cd9`. The rule now selects the latest
   trusted, non-dismissed OCI reviewer Bot PASS for the exact current commit and
-  rejects stale, superseded or contradictory PASS; runtime, deployment,
-  durable receipt, and downstream effect remain unchanged.
+  rejects stale, superseded or contradictory PASS. This repair performed no
+  runtime, provider, or deployment operation; durable receipt and downstream
+  effect remain separate facts to verify after merge.
 - **4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0 — generated declaration validation:** PR #26 validates an exact Next.js `14.0.4` declaration in both `package.json` and the `package-lock.json` root after build and guarded root copy, before manifest or publication. The guard refuses dependency-location mismatches, missing expected files, unsafe leaves, unsupported safe-open flags, replacement races, and short reads. Local documented checks pass 54 Buddy tests, Python compilation, and diff validation; CI passed for `26a74a3`, but exact-head trusted review for the current PR #26 source remains open.
 - **Generated-file evidence:** A private disposable OCI scratch run at 00:31 UTC produced 201 output bytes matching SHA-256 `9269d492…`; generator source hash `48d0f69a…` is recorded in `docs/NEXT_GENERATOR_EVIDENCE.md`. The scratch was removed, and no app files, provider, active service, or route changed.
 - **08ceda61a3d670d2e417e409eadf57406857414e — accepted release operator:** PR #25 merged after exact-head trusted PASS and Node 18/20 CI. Four read-only operator modules are installed under `/opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e/ops/`; its manifest hash `e7bc3f7b…` matches all four modules. Prepare passed build and keyless probe, then refused generated `next-env.d.ts` before publication. Owned staging was empty; active PID 1204 and the protected dirty checkout remain. This does not establish PR #26 review, merged source, or app installation.

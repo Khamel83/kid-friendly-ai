@@ -9,8 +9,9 @@ catalog exclusions, normal GitHub protections, and the single PASS gate remain
 as authorized.
 
 Source scope is `AGENTS.md`, `TODO.md`, `CONTEXT.md`, and this handoff only.
-The Buddy runtime, provider operation, durable receipt, and downstream effect
-are unchanged; no deployment or live caller operation was performed.
+No runtime, provider, or deployment operation was performed by this repair.
+Durable receipt and downstream effect are not established by this source-only
+change; verify them separately after merge.
 
 Next: push the existing PR branch without force, let the natural webhook review
 the new head, then inspect native current-head reviews and recheck PR state.
