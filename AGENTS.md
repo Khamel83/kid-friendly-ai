@@ -30,6 +30,12 @@ them with the work they describe:
 - `INFRA.md`: when a host, service, port, credential location, or deploy path
   changes.
 
+Keep one current checkpoint and replace superseded facts. Keep each long
+writeup in a dated history/evidence file and link it from the relevant record.
+For document-size warnings or compaction, follow the
+[working-document contract](https://github.com/Khamel83/docs/blob/main/templates/WORKING_DOCUMENTS.md).
+Preserve previous bytes, active decisions and every unresolved task.
+
 A change is not done until it is deployed and verified. If the repository has
 a deploy command or automation, run it (or confirm it ran) and check the
 result. Registration steps the deploy depends on (for example a consumer list
@@ -37,16 +43,13 @@ or catalog entry) are part of the change. Never leave a "remember to run X"
 step for the owner; if something truly needs the owner, write it in
 `HANDOFF.md` as a blocker with the exact command.
 
-For already authorized routine maintenance PRs that only add or modify root
-`AGENTS.md`, `INFRA.md`, `CONTEXT.md`, `TODO.md`, `HANDOFF.md`, or `CHARTER.md`,
-the agent may apply `janitor:auto-merge` within the owner's existing
-task authorization. Janitor's nightly fleet publisher provisions the repository
-label; it does not label existing PRs. The label attests existing facts or
-owner-approved policy; CI success alone does not grant task authority. Route new
-classification, lifecycle, runtime, or infrastructure decisions for human
-review. Janitor merges eligible owner-authored PRs after a trusted Bot PASS
-for the exact current commit and passing checks. Verify the merged PR and
-its merge receipt before reporting completion.
+Homelab owns active repository membership and explicit PR merge exclusions.
+Janitor's standing worker merges every PR type after the latest trusted,
+non-dismissed OCI reviewer Bot PASS for the exact current commit. A stale,
+superseded or contradictory PASS does not qualify. It uses GitHub's normal merge endpoint
+and records independent readback. Labels, authors and changed paths do not
+restrict eligibility. Homelab owns improvements to the reviewer and PASS
+process. Verify the merged PR and its merge receipt before reporting completion.
 <!-- janitor:end:working-docs -->
 <!-- janitor:begin:fresh-source -->
 ## Start from the current remote branch
