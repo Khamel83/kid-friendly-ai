@@ -1,3 +1,20 @@
+# Managed rule repair handoff — 2026-10-05
+
+PR [#29](https://github.com/Khamel83/kid-friendly-ai/pull/29) started from
+source candidate `7a89622027db8c8268cd76bcd55b8ab90a375cd9`. The repair changes
+only managed working documentation: the Janitor rule now requires the latest
+trusted, non-dismissed OCI reviewer Bot PASS for the exact current commit, and
+stale, superseded or contradictory PASS does not qualify. All-PR eligibility,
+catalog exclusions, normal GitHub protections, and the single PASS gate remain
+as authorized.
+
+Source scope is `AGENTS.md`, `TODO.md`, `CONTEXT.md`, and this handoff only.
+The Buddy runtime, provider operation, durable receipt, and downstream effect
+are unchanged; no deployment or live caller operation was performed.
+
+Next: push the existing PR branch without force, let the natural webhook review
+the new head, then inspect native current-head reviews and recheck PR state.
+
 # Current Buddy release state — October 3, 00:31 UTC
 
 PR26 is the current generated-file repair; its final exact-head trusted review
