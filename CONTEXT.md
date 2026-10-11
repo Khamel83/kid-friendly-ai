@@ -1,3 +1,9 @@
+## Current repository-plan checkpoint — October 11, 2026
+
+The owner requested one owning plan for every open TODO, issue and PR. [docs/REPO_PLAN.md](docs/REPO_PLAN.md) maps 5 unchecked source references and 2 open native records observed from `9c473aa42697b8ff5f92a9bc900e953d605262c0`. G2K is the executor; coordinator34 tracks project-owned acceptance. Previous source prose below is retained as dated evidence, not refreshed runtime attestation.
+
+This source proposal requires trusted exact-head review, native CI and normal merge before audit35 is closed or finite sequencing is applied. Source, installation, ordinary receipt and downstream effect remain separate. Next: verify this PR’s current head and accepted native merge, then update the existing coordinator; resolve the explicitly listed next review/receipt/decision in plan order. No busy worker, host service, access policy or retry state was changed.
+
 # Current Buddy release state — October 3, 00:31 UTC
 
 PR26 is the current generated-file repair; its final exact-head trusted review
