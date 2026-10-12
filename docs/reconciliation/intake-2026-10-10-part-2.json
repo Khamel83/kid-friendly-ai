@@ -1,0 +1,111 @@
+[
+  {
+    "number": 9,
+    "kind": "issue",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/issues/9",
+    "updated_at": "2026-09-23T23:22:15Z",
+    "title": "Integrate parental-review extraction through a server-side Next.js route",
+    "body": "Parent issue: #4\n\n## What\nAdd a server-only Next.js parental-review client and route that accepts a bounded conversation segment and calls the Python endpoint through a private `LANGEXTRACT_SERVICE_URL`. The browser must never receive or use the Mac Mini service URL directly.\n\nGate the integration with `PARENTAL_REVIEW_EXTRACTION_ENABLED`, disabled by default. Run it only from the explicit parental-controls/review flow, after conversation generation, and never on the latency-critical chat response path. Apply the same 8,000-character limit before making the outbound request. Use a finite timeout and return a stable result for disabled, unavailable, and successful states; extraction failures must not fail or alter the original conversation response.\n\nReturn only the normalized findings and required source excerpts. Do not persist the submitted transcript or result and do not log request bodies, prompts, excerpts, or model responses.\n\n## Acceptance criteria\n- [ ] With the feature disabled, the existing conversation flow behaves exactly as before and no extraction request is made.\n- [ ] With the feature enabled, the server-side route sends only the bounded conversation segment to the private Python service and returns normalized findings to the parental-controls flow.\n- [ ] The browser-visible API exposes no Ollama or Mac Mini service URL.\n- [ ] Timeout, connection, non-2xx, and malformed-response cases return an unavailable review result without changing the conversation response.\n- [ ] Server-side integration tests verify disabled behavior, private outbound routing, size enforcement, successful findings, and fail-open error handling.",
+    "body_complete": true,
+    "full_body_sha256": "9fe1c0df0ef112d3af8256899ce6b1ad383328e37e9d8aba1ef7da41abdf16a4",
+    "closed_at": "2026-09-23T23:22:15Z",
+    "labels": [],
+    "merged_at": null,
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 8,
+    "kind": "issue",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/issues/8",
+    "updated_at": "2026-09-23T23:22:16Z",
+    "title": "Add a bounded local-Ollama parental-review extraction endpoint",
+    "body": "Parent issue: #4\n\n## What\nAdd a Python FastAPI endpoint at `POST /v1/parental-review/extract` beside the existing local Ollama service. The request must contain `messages`, each with a bounded speaker value (`child`, `assistant`, `parent`, or `unknown`) and text, plus an optional locale. Reject empty input, malformed messages, more than 64 messages, or more than 8,000 combined characters.\n\nInvoke LangExtract through the configured Ollama provider using a strict output schema. Normalize the response to findings with `category` (`safety_topic`, `educational_interest`, or `review_flag`), `severity` (`none`, `low`, `medium`, or `high`), `speaker`, `explanation`, and a source span containing `message_index`, `start`, `end`, and `quote`. Reject model results with unknown enum values, out-of-range offsets, or quotes that do not equal the referenced message substring. Do not fall back to a cloud provider.\n\nThe endpoint must not persist transcripts, findings, prompts, or excerpts, and errors must not include raw transcript content. Keep existing FastAPI endpoints and real-time filtering unchanged.\n\n## Acceptance criteria\n- [ ] A valid bounded request returns only schema-validated findings and source spans tied to the submitted message text.\n- [ ] Oversized, empty, and malformed requests receive documented 4xx responses.\n- [ ] Invalid model output receives a controlled 5xx response and never reaches the caller as unconstrained model prose.\n- [ ] Missing or unusable Ollama configuration fails closed for this endpoint; no cloud-model fallback is attempted.\n- [ ] Endpoint tests cover valid extraction, invalid source offsets, repeated phrases with the correct occurrence, and request-size rejection.\n- [ ] Existing FastAPI endpoints and content-filter behavior continue to pass their current checks.",
+    "body_complete": true,
+    "full_body_sha256": "2d8b19568eac9f088148606f52e87d8c2ccb97818e72a698a9957362694a8fc7",
+    "closed_at": "2026-09-23T23:22:16Z",
+    "labels": [],
+    "merged_at": null,
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 7,
+    "kind": "pr",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/pull/7",
+    "updated_at": "2026-09-18T00:13:33Z",
+    "title": "docs: reconcile repository context and TODOs",
+    "body": "Janitor reconciled only the managed sections of `CONTEXT.md` and `TODO.md` from evidence already published in this repository.\n\nImmutable source SHA: `2c836efc99de471300541ba919528778a7c113ec`\n- [CONTEXT.md](https://github.com/Khamel83/kid-friendly-ai/blob/2c836efc99de471300541ba919528778a7c113ec/CONTEXT.md)\n- [TODO.md](https://github.com/Khamel83/kid-friendly-ai/blob/2c836efc99de471300541ba919528778a7c113ec/TODO.md)\n- Evidence digest: `becb3b30bc5b6d8d6849b2b2ad23b78ea2bec8900e72946b24e1e97578165d47`\n\nJanitor must not merge this PR. External automated review and human review are expected.",
+    "body_complete": true,
+    "full_body_sha256": "443c5e73640f6b7d1732747e84c370699ff4bea6ddd9fd6ddcb1d6d5e9b78715",
+    "closed_at": "2026-09-18T00:13:32Z",
+    "labels": [],
+    "merged_at": "2026-09-18T00:13:32Z",
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 6,
+    "kind": "pr",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/pull/6",
+    "updated_at": "2026-09-14T18:04:41Z",
+    "title": "docs: reconcile repository context and TODOs",
+    "body": "Janitor reconciled only the managed sections of `CONTEXT.md` and `TODO.md` from evidence already published in this repository.\n\nImmutable source SHA: `8ab3fdf98b27958119d6cfa0f02a2b4633a48c79`\n- [CONTEXT.md](https://github.com/Khamel83/kid-friendly-ai/blob/8ab3fdf98b27958119d6cfa0f02a2b4633a48c79/CONTEXT.md)\n- [TODO.md](https://github.com/Khamel83/kid-friendly-ai/blob/8ab3fdf98b27958119d6cfa0f02a2b4633a48c79/TODO.md)\n- Evidence digest: `9f7e881a5362d0ac4b9538cc12a8fefe28f502db958e5e96d65c47004cbebd58`\n\nJanitor must not merge this PR. External automated review and human review are expected.",
+    "body_complete": true,
+    "full_body_sha256": "224df423c23bf4d6d58e2026c7e9f4a4bb618976a7e3d8e80a255d6cd2ee2195",
+    "closed_at": "2026-09-14T18:04:41Z",
+    "labels": [],
+    "merged_at": "2026-09-14T18:04:40Z",
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 5,
+    "kind": "pr",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/pull/5",
+    "updated_at": "2026-09-13T18:21:46Z",
+    "title": "docs: reconcile repository context and TODOs",
+    "body": "Janitor reconciled only the managed sections of `CONTEXT.md` and `TODO.md` from evidence already published in this repository.\n\nImmutable source SHA: `2a4dacede6d6e3fe5a82c72443e3f4c5da2313f2`\n- [CONTEXT.md](https://github.com/Khamel83/kid-friendly-ai/blob/2a4dacede6d6e3fe5a82c72443e3f4c5da2313f2/CONTEXT.md)\n- [TODO.md](https://github.com/Khamel83/kid-friendly-ai/blob/2a4dacede6d6e3fe5a82c72443e3f4c5da2313f2/TODO.md)\n- Evidence digest: `938bf45000470ddd03bba68c91e1761e9fdac1b01e00fc97aa8f34a53419e61b`\n\nJanitor must not merge this PR. External automated review and human review are expected.",
+    "body_complete": true,
+    "full_body_sha256": "3d937bb16ee020dad8b3f857f0fda3ba012407137c6ccdfc0d532926d26aafa2",
+    "closed_at": "2026-09-13T18:21:46Z",
+    "labels": [],
+    "merged_at": "2026-09-13T18:21:46Z",
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 4,
+    "kind": "issue",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/issues/4",
+    "updated_at": "2026-09-23T23:00:45Z",
+    "title": "[Star Opportunity] google/langextract -> Khamel83/kid-friendly-ai: LangExtract converts unstructured text into user-defined structured records with precise source grounding, supports explicit output schemas, and can use local Ollama models.",
+    "body": "<!-- ideaz:opportunity pair=\"google/langextract::Khamel83/kid-friendly-ai\" -->\n\n<!-- ideaz:generated:start -->\n## Recommendation\n\nThis is a proposal for evaluation. It does not mean that implementation, approval, deployment, or adoption has occurred.\n\n**Capability:** LangExtract converts unstructured text into user-defined structured records with precise source grounding, supports explicit output schemas, and can use local Ollama models.\n**Confidence:** 0.86\n\n## Starred repository evidence\n\n- **Repository:** [google/langextract](https://github.com/google/langextract)\n- **Description:** A Python library for extracting structured information from unstructured text using LLMs with precise source grounding and interactive visualization.\n- **Latest observed commit:** bd5d1ebb51db51e9f6d054c026489d1d8127b005\n\n## Matched repository evidence\n\n- **Repository:** [Khamel83/kid-friendly-ai](https://github.com/Khamel83/kid-friendly-ai)\n- **Description:** AI for kid\n- **Recent commits in window:** 1\n- **Target subsystem:** `Parental-controls and child-safety review subsystem for AI conversation transcripts, specifically the documented local Mac Mini inference path that already runs Ollama and a Python FastAPI service.`\n\n## Direct relationship\n\nAdd a Python extraction endpoint alongside the existing Mac Mini FastAPI/Ollama services. The Next.js application can submit a bounded conversation segment and receive schema-validated safety topics, educational interests, or review flags with source spans. Local Ollama execution preserves the target's offline and minimal-data goals.\n\nSupporting evidence:\n- The target explicitly documents content filtering, parental controls, privacy protection, offline operation, and a minimal data footprint.\n- The target's architecture includes a Mac Mini running local Ollama plus an existing Python FastAPI/Uvicorn service, providing a concrete deployment and HTTP integration pattern for a Python library.\n- LangExtract is specifically described as extracting user-defined structured information from unstructured documents with precise source grounding.\n- LangExtract documents local LLM support through Ollama, avoiding a mandatory cloud-model dependency.\n- LangExtract added user-provided output-schema support for Gemini and OpenAI, enabling a defined safety-review record rather than unconstrained model prose.\n- LangExtract's recent monotonic occurrence-alignment work supports reliable grounding when conversation text contains repeated phrases.\n- Both repositories show recent activity, and LangExtract is not archived.\n\n## Expected benefit\n\nProduce auditable, source-linked parental summaries and safety-review events from conversations without relying on opaque free-form classifications. Grounded spans let a parent or moderator see exactly which child or assistant text caused each extracted topic or flag, while local Ollama processing can avoid sending children's transcripts to a cloud provider.\n\n## Proposed implementation outline\n\n1. Define a narrow extraction schema such as category, severity, speaker, explanation, and grounded source span; restrict categories to the target's existing child-safety and parental-control requirements.\n1. Create a Python FastAPI endpoint on the Mac Mini that invokes LangExtract with the local Ollama provider and rejects responses that do not satisfy the schema.\n1. Call the endpoint from the Next.js server-side conversation or parental-controls flow after response generation; do not expose the service directly to the browser.\n1. Return only structured findings and required source excerpts, with strict transcript-size limits and no default persistence.\n1. Display grounded findings in the parental-controls interface or use them as an auditable secondary review signal; keep the existing real-time content filter authoritative until latency and recall are validated.\n1. Evaluate the extractor against representative age-appropriate, unsafe, ambiguous, multilingual, and repeated-phrase conversations before enabling it outside local or opt-in operation.\n\n## Compatibility and risks\n\nCompatible through a language-neutral HTTP boundary: LangExtract and the existing Mac Mini service are Python-based, the target already uses local Ollama, and Next.js can consume structured JSON server-side. It should be integrated as an asynchronous or secondary analysis service rather than imported into the TypeScript application or placed on the latency-critical response path.\n\n- Processing children's conversation text creates privacy and COPPA/GDPR exposure if requests, prompts, excerpts, or results are logged or persisted.\n- LLM extraction is probabilistic and must not become the sole real-time safety control.\n- A Python sidecar adds deployment, health-check, versioning, and operational complexity to a primarily TypeScript application.\n- Local Ollama model quality may be insufficient for subtle safety categories or all five documented languages.\n- Grounded extraction can identify supporting text but does not prove that a classification is correct.\n- Transcript analysis may add unacceptable latency if performed synchronously during conversation generation.\n\n## Acceptance criteria\n\n- The target subsystem has a focused test.\n- The integration preserves the target repository's existing behavior.\n\nEvidence fingerprint: `64320277fe942e88a94c8853eb2b2af3cef843a7cd9ee3952808235024512ba9`\nGenerated at: 2026-09-10T05:10:09.142007+00:00\n<!-- ideaz:generated:end -->\n",
+    "body_complete": true,
+    "full_body_sha256": "63decf4d948ffdf100755eb59972f490a02298f6d631be2b58495833b6e192a7",
+    "closed_at": "2026-09-23T23:00:45Z",
+    "labels": [
+      "star-opportunity"
+    ],
+    "merged_at": null,
+    "merge_identity": "unknown unless separately verified"
+  },
+  {
+    "number": 3,
+    "kind": "issue",
+    "state": "closed",
+    "url": "https://github.com/Khamel83/kid-friendly-ai/issues/3",
+    "updated_at": "2026-09-23T23:00:47Z",
+    "title": "[Star Opportunity] apple/container -> Khamel83/kid-friendly-ai: Build and run OCI-compatible Linux container images as lightweight virtual machines on Apple-silicon Macs, with standard registry pull and push support.",
+    "body": "<!-- ideaz:opportunity pair=\"apple/container::Khamel83/kid-friendly-ai\" -->\n\n<!-- ideaz:generated:start -->\n## Recommendation\n\nThis is a proposal for evaluation. It does not mean that implementation, approval, deployment, or adoption has occurred.\n\n**Capability:** Build and run OCI-compatible Linux container images as lightweight virtual machines on Apple-silicon Macs, with standard registry pull and push support.\n**Confidence:** 0.86\n\n## Starred repository evidence\n\n- **Repository:** [apple/container](https://github.com/apple/container)\n- **Description:** A tool for creating and running Linux containers using lightweight virtual machines on a Mac. It is written in Swift, and optimized for Apple silicon. \n- **Latest observed commit:** 8ca5c80c380cdd925d87b497fb23eddb6b58843f\n\n## Matched repository evidence\n\n- **Repository:** [Khamel83/kid-friendly-ai](https://github.com/Khamel83/kid-friendly-ai)\n- **Description:** AI for kid\n- **Recent commits in window:** 1\n- **Target subsystem:** `The Next.js container deployment defined by Dockerfile and the app service in docker-compose.yml, specifically its runner image, port 3000 endpoint, environment configuration, and /api/health check.`\n\n## Direct relationship\n\nUse apple/container as an optional macOS development and smoke-test runtime for the existing Dockerfile runner image. The seam is the OCI image boundary, so the application image can be exercised without changing the Next.js application or its production Docker/systemd deployment.\n\nSupporting evidence:\n- The source explicitly creates and runs Linux containers as lightweight virtual machines on Apple-silicon Macs.\n- The source consumes and produces OCI-compatible images, can build images, and interoperates with standard container registries.\n- The target has a Dockerfile with a runner target and a docker-compose.yml app service that builds that target.\n- The target app has a defined runtime contract: port 3000, production environment variables, and a healthcheck implemented by healthcheck.js.\n- The target includes a Mac Mini local-inference host, making a Mac-specific container runtime potentially relevant for local integration work.\n- The source is active, unarchived, and reached v1.0.0 in the supplied recent commit history.\n\n## Expected benefit\n\nProvide VM-isolated, Apple-silicon-native local validation of the production Next.js OCI image, including startup and health behavior, without altering the deployable image or depending on Docker Desktop for that validation path.\n\n## Proposed implementation outline\n\n1. Confirm the intended development Mac is Apple silicon and running macOS 26, then install the signed apple/container release and start its system service.\n1. Build the existing Dockerfile runner target as an OCI image using apple/container rather than introducing a second image definition.\n1. Run the image with port 3000 exposed and the non-secret environment contract currently defined for the docker-compose.yml app service.\n1. Exercise the existing /api/health endpoint and one AI-independent application route as a container-runtime smoke check.\n1. Document this as an optional macOS workflow in DEVELOPER_GUIDE.md or DEPLOYMENT_DOCKER.md while retaining docker-compose.yml for Redis, Nginx, and Linux/systemd production orchestration.\n\n## Compatibility and risks\n\nStrong at the OCI image boundary: the target already defines a Linux container image, and the source explicitly supports OCI images. Compatibility is conditional on an Apple-silicon Mac running macOS 26. The supplied evidence does not establish Docker Compose compatibility, so integration should initially cover only the application image rather than replacing the complete multi-service stack.\n\n- apple/container requires Apple silicon and macOS 26; the supplied target evidence identifies a Mac Mini but does not confirm its processor or operating-system version.\n- No supplied evidence establishes Docker Compose support, so Redis, Nginx, networks, dependencies, and the complete compose lifecycle cannot be assumed to work unchanged.\n- Bind-mount, networking, environment-file, and healthcheck behavior may differ from Docker and must be verified against the app service contract.\n- This should remain a development and smoke-test option; replacing the Linux Docker/systemd production path would be unsupported by the supplied evidence.\n\n## Acceptance criteria\n\n- The target subsystem has a focused test.\n- The integration preserves the target repository's existing behavior.\n\nEvidence fingerprint: `49721370ef8a0beda6372623f30abb21a983d77a36d82b7f70797a0290e4c3cd`\nGenerated at: 2026-09-10T04:07:22.675380+00:00\n<!-- ideaz:generated:end -->\n",
+    "body_complete": true,
+    "full_body_sha256": "d6f577700fb08813eb76c108ed9812ed220b73d37d62976bf1f32ced1c8c2411",
+    "closed_at": "2026-09-23T23:00:47Z",
+    "labels": [
+      "star-opportunity"
+    ],
+    "merged_at": null,
+    "merge_identity": "unknown unless separately verified"
+  }
+]
