@@ -49,17 +49,7 @@ The 2026-09-29 source reconciliation keeps the child-facing cloud restrictions a
 A keyless, disposable Homelab build/probe proves rebuild and bounded input rejection only. Its health status can correctly be 503 when no provider key is present. Keep exact source, active runtime, private receipt, and downstream answer as separate evidence gates; see `HANDOFF.md` for current commit and runtime facts.
 
 <!-- janitor:begin:recent -->
-## Recent
-
-- 2026-10-05 source-only managed-rule repair for PR [#29](https://github.com/Khamel83/kid-friendly-ai/pull/29) started from candidate
-  `7a89622027db8c8268cd76bcd55b8ab90a375cd9`. The rule now selects the latest
-  trusted, non-dismissed OCI reviewer Bot PASS for the exact current commit and
-  rejects stale, superseded or contradictory PASS. This repair performed no
-  runtime, provider, or deployment operation; durable receipt and downstream
-  effect remain separate facts to verify after merge.
-- **4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0 — generated declaration validation:** PR #26 validates an exact Next.js `14.0.4` declaration in both `package.json` and the `package-lock.json` root after build and guarded root copy, before manifest or publication. The guard refuses dependency-location mismatches, missing expected files, unsafe leaves, unsupported safe-open flags, replacement races, and short reads. Local documented checks pass 54 Buddy tests, Python compilation, and diff validation; CI passed for `26a74a3`, but exact-head trusted review for the current PR #26 source remains open.
-- **Generated-file evidence:** A private disposable OCI scratch run at 00:31 UTC produced 201 output bytes matching SHA-256 `9269d492…`; generator source hash `48d0f69a…` is recorded in `docs/NEXT_GENERATOR_EVIDENCE.md`. The scratch was removed, and no app files, provider, active service, or route changed.
-- **08ceda61a3d670d2e417e409eadf57406857414e — accepted release operator:** PR #25 merged after exact-head trusted PASS and Node 18/20 CI. Four read-only operator modules are installed under `/opt/buddy-release-operators/08ceda61a3d670d2e417e409eadf57406857414e/ops/`; its manifest hash `e7bc3f7b…` matches all four modules. Prepare passed build and keyless probe, then refused generated `next-env.d.ts` before publication. Owned staging was empty; active PID 1204 and the protected dirty checkout remain. This does not establish PR #26 review, merged source, or app installation.
-- **Release gate:** PR #26 still needs exact-head trusted PASS and CI, merge, staging of all four exact merged production modules, guarded prepare, independent manifest/probe verification, CAS installation, and Buddy-only runtime and health checks.
-- **Recovery and runtime boundary:** OCI is Buddy's active host; Homelab is its recovery host. A Git SHA alone does not identify running app state because the OCI deployment checkout has unpublished edits. Those private edits are not release evidence or proof of active-runtime parity. Exact source, active runtime, private receipt, and downstream behavior remain separate verification gates.
+- Reconciled all open work into owning repository plan ([#36](https://github.com/Khamel83/kid-friendly-ai/pull/36), `f7c1752ea3f6a264fef8bba334c3bfc580cd3398`).
+- Mapped 5 unchecked source references and 2 open native records to [docs/REPO_PLAN.md](docs/REPO_PLAN.md) and coordinator [issue #34](https://github.com/Khamel83/kid-friendly-ai/issues/34).
+- Validated generated Next declaration through guarded release copy ([#26](https://github.com/Khamel83/kid-friendly-ai/pull/26), `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0`).
 <!-- janitor:end:recent -->
