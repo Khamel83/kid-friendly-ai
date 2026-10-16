@@ -47,3 +47,6 @@ The clean source rebuild and no-provider loopback probe are recorded in [HANDOFF
 ## Owning repository plan
 
 Use [the ordered reconciliation](docs/REPO_PLAN.md) and [coordinator #34](https://github.com/Khamel83/kid-friendly-ai/issues/34). It maps every observed open source record. Existing incomplete acceptance and holds remain in force.
+## Fleet CI cancellation - source checkpoint (October 16, 2026)
+
+- [ ] `.github/workflows/ci-cd.yml` has a prepared PR-only concurrency cancellation change on `feat/fleet-ci-cancellation-20261016`; native CI, review, and normal merge remain pending. No runtime change is claimed.

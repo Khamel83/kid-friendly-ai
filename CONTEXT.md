@@ -53,3 +53,6 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 - Mapped 5 unchecked source references and 2 open native records to [docs/REPO_PLAN.md](docs/REPO_PLAN.md) and coordinator [issue #34](https://github.com/Khamel83/kid-friendly-ai/issues/34).
 - Validated generated Next declaration through guarded release copy ([#26](https://github.com/Khamel83/kid-friendly-ai/pull/26), `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0`).
 <!-- janitor:end:recent -->
+## Fleet CI cancellation - source checkpoint (October 16, 2026)
+
+`.github/workflows/ci-cd.yml` has a prepared source change on `feat/fleet-ci-cancellation-20261016` that coalesces superseded pull-request runs and leaves main, manual, release, and scheduled runs non-canceling. Native CI, review, and normal merge remain pending; no runtime change is claimed.
