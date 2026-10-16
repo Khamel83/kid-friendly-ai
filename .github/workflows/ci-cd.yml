@@ -85,6 +85,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
 
     - name: Setup Node.js
       uses: actions/setup-node@v4

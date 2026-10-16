@@ -50,7 +50,7 @@ Use [the ordered reconciliation](docs/REPO_PLAN.md) and [coordinator #34](https:
 
 ## Vercel release adapter repair — October 16, 2026
 
-- [x] Prepare the exact `main` source at `1402c0b14945636aa1f8b5d09bdc715e46c3c963`: replace unresolved `vercel/action@v1` with pinned Vercel CLI `64.4.0` (`pull` production, `build --prod`, `deploy --prebuilt --prod`). Retain the production environment, main-only release gate, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_*` names, and the existing unconfigured fallback. No credential or runtime change was made.
+- [x] Prepare the exact `main` source at `1402c0b14945636aa1f8b5d09bdc715e46c3c963`: replace unresolved `vercel/action@v1` with pinned Vercel CLI `64.4.0` (`pull` production, `build --prod`, `deploy --prebuilt --prod`), and make the release checkout explicit at `${{ github.sha }}`. Retain the production environment, main-only release gate, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_*` names, and the existing unconfigured fallback. No credential or runtime change was made.
 - [ ] Publish the normal PR, obtain native CI and trusted review, merge through the normal `main` path, then verify the exact release run and `/api/health`. A live Vercel release remains unperformed and requires the existing Vercel values to be configured.
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
 

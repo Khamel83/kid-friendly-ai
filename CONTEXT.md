@@ -56,7 +56,7 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 
 ## Vercel release adapter checkpoint — October 16, 2026
 
-The candidate is based on exact `main` `1402c0b14945636aa1f8b5d09bdc715e46c3c963`. It replaces the unavailable `vercel/action@v1` with Vercel CLI `64.4.0`, using the official production pull/build/prebuilt-deploy flow. The `production` environment, main-only condition, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_ORG_ID`/`vars.VERCEL_PROJECT_ID` names, and missing-configuration fallback remain in place. `actionlint`, YAML parsing, extracted deployment-shell syntax, the empty-token guard, and the pinned CLI version check passed. No credential, app source, or runtime was changed.
+The candidate is based on exact `main` `1402c0b14945636aa1f8b5d09bdc715e46c3c963`. It replaces the unavailable `vercel/action@v1` with Vercel CLI `64.4.0`, using the official production pull/build/prebuilt-deploy flow, and makes the release checkout explicit at `${{ github.sha }}`. The `production` environment, main-only condition, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_ORG_ID`/`vars.VERCEL_PROJECT_ID` names, and missing-configuration fallback remain in place. `actionlint`, YAML parsing, extracted deployment-shell syntax, the empty-token guard, and the pinned CLI version check passed. No credential, app source, or runtime was changed.
 
 Next: publish and review the normal PR; then verify native CI, merge, the exact main release run, and the deployed health surface. The current GitHub configuration exposes no Vercel secret or variable names through the read-only Actions metadata, so a live release remains an owner/configuration gate.
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
