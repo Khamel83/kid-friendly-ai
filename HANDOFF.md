@@ -76,3 +76,9 @@ Next: establish exact running-artifact/source parity without discarding the prot
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
 
 Prepared source on `feat/fleet-ci-cancellation-20261016` adds PR-only concurrency cancellation to `.github/workflows/ci-cd.yml`. Native CI, review, and normal merge remain pending. No runtime or deployment change is claimed.
+
+## Vercel release adapter checkpoint — October 16, 2026
+
+Candidate source: exact `main` `1402c0b14945636aa1f8b5d09bdc715e46c3c963`. The workflow now uses pinned `vercel@64.4.0` with `vercel pull --yes --environment=production`, `vercel build --prod`, and `vercel deploy --prebuilt --prod`; the production environment, main-only release condition, existing Vercel secret/variable names, and unconfigured fallback remain. Native checks passed: `actionlint`, YAML parse, extracted deployment-shell `bash -n`, empty-token guard, and CLI `64.4.0` version check. No deployment or credential mutation occurred.
+
+Next: publish a normal PR from a fresh main readback, wait for native CI/trusted review, then let the normal main path release and separately verify the exact SHA, release result, and `/api/health`. Recheck source with `gh api repos/Khamel83/kid-friendly-ai/git/ref/heads/main --jq .object.sha` before publication; regenerate if it is no longer `1402c0b14945636aa1f8b5d09bdc715e46c3c963`. No Vercel values are currently visible in read-only Actions metadata, so configured deployment is an owner gate.

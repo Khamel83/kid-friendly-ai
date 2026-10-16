@@ -53,6 +53,12 @@ A keyless, disposable Homelab build/probe proves rebuild and bounded input rejec
 - Mapped 5 unchecked source references and 2 open native records to [docs/REPO_PLAN.md](docs/REPO_PLAN.md) and coordinator [issue #34](https://github.com/Khamel83/kid-friendly-ai/issues/34).
 - Validated generated Next declaration through guarded release copy ([#26](https://github.com/Khamel83/kid-friendly-ai/pull/26), `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0`).
 <!-- janitor:end:recent -->
+
+## Vercel release adapter checkpoint — October 16, 2026
+
+The candidate is based on exact `main` `1402c0b14945636aa1f8b5d09bdc715e46c3c963`. It replaces the unavailable `vercel/action@v1` with Vercel CLI `64.4.0`, using the official production pull/build/prebuilt-deploy flow. The `production` environment, main-only condition, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_ORG_ID`/`vars.VERCEL_PROJECT_ID` names, and missing-configuration fallback remain in place. `actionlint`, YAML parsing, extracted deployment-shell syntax, the empty-token guard, and the pinned CLI version check passed. No credential, app source, or runtime was changed.
+
+Next: publish and review the normal PR; then verify native CI, merge, the exact main release run, and the deployed health surface. The current GitHub configuration exposes no Vercel secret or variable names through the read-only Actions metadata, so a live release remains an owner/configuration gate.
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
 
 `.github/workflows/ci-cd.yml` has a prepared source change on `feat/fleet-ci-cancellation-20261016` that coalesces superseded pull-request runs and leaves main, manual, release, and scheduled runs non-canceling. Native CI, review, and normal merge remain pending; no runtime change is claimed.

@@ -101,24 +101,35 @@ jobs:
     - name: Deploy to Vercel
       id: deploy-vercel
       if: vars.VERCEL_TOKEN != ''
-      uses: vercel/action@v1
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ vars.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ vars.VERCEL_PROJECT_ID }}
-        working-directory: .
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+        VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      run: |
+        set -euo pipefail
+        if [[ -z "${VERCEL_TOKEN}" ]]; then
+          echo "Vercel deployment is not configured; skipping."
+          echo "configured=false" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+
+        npm install --global --no-audit --no-fund vercel@64.4.0
+        vercel pull --yes --environment=production --token="${VERCEL_TOKEN}"
+        vercel build --prod --token="${VERCEL_TOKEN}"
+        vercel deploy --prebuilt --prod --token="${VERCEL_TOKEN}"
+        echo "configured=true" >> "${GITHUB_OUTPUT}"
 
     - name: Deploy Success Notification
-      if: steps.deploy-vercel.outcome == 'success'
+      if: steps.deploy-vercel.outputs.configured == 'true'
       run: |
         echo "✅ Deployment completed successfully!"
         echo "🌐 Site: https://kid-friendly-ai.vercel.app"
         echo "📊 Vercel Dashboard: https://vercel.com/khamel83/kid-friendly-ai"
 
     - name: Deployment Fallback
-      if: steps.deploy-vercel.outcome != 'success' || vars.VERCEL_TOKEN == ''
+      if: steps.deploy-vercel.outputs.configured != 'true'
       run: |
-        echo "⚠️  Vercel deployment not configured or failed"
+        echo "⚠️  Vercel deployment is not configured"
         echo "🔧 Manual deployment required:"
         echo "   1. Go to https://vercel.com/khamel83/kid-friendly-ai"
         echo "   2. Trigger deployment from dashboard"
