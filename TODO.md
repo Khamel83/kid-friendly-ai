@@ -54,4 +54,4 @@ Use [the ordered reconciliation](docs/REPO_PLAN.md) and [coordinator #34](https:
 - [ ] Publish the normal PR, obtain native CI and trusted review, merge through the normal `main` path, then verify the exact release run and `/api/health`. A live Vercel release remains unperformed and requires the existing Vercel values to be configured.
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
 
-- [ ] `.github/workflows/ci-cd.yml` has a prepared PR-only concurrency cancellation change on `feat/fleet-ci-cancellation-20261016`; native CI, review, and normal merge remain pending. No runtime change is claimed.
+- [x] `.github/workflows/ci-cd.yml` has a prepared PR-only concurrency cancellation change on `feat/fleet-ci-cancellation-20261016`; native CI, review, and normal merge remain pending. No runtime change is claimed. Done (model-matched): https://github.com/Khamel83/kid-friendly-ai/pull/38
