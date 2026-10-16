@@ -73,3 +73,6 @@ manifest/probe, then CAS install and check Buddy-only runtime/health.
 **Checks:** Focused SSE tests 2/2, changed-file ESLint, production build, exact-head Janitor review, and Node 18/20 CI passed. Repository-wide lint/type checks still fail in unrelated pre-existing files (`ContentUpdates.tsx`, `disabled-tests/*.ts`); CI treats those two checks as nonblocking. The keyless probe made no provider request and did not prove an AI answer.
 
 Next: establish exact running-artifact/source parity without discarding the protected OCI patch; then deploy the reviewed health fix to the active service. Install a persistent inactive Homelab release with scoped provider credentials, verify a bounded real operation, and prove route fencing and return under the Homelab recovery contract. Recheck OCI with `systemctl show buddy.service -p ActiveState -p WorkingDirectory`, `git -C /home/ubuntu/github/kid-friendly-ai status --short`, and `curl http://127.0.0.1:3000/api/health` without printing credentials.
+## Fleet CI cancellation - source checkpoint (October 16, 2026)
+
+Prepared source on `feat/fleet-ci-cancellation-20261016` adds PR-only concurrency cancellation to `.github/workflows/ci-cd.yml`. Native CI, review, and normal merge remain pending. No runtime or deployment change is claimed.
