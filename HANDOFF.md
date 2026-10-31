@@ -1,3 +1,11 @@
+## Current source-status correction — October 31, 2026
+
+[PR #26](https://github.com/Khamel83/kid-friendly-ai/pull/26) merged as `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0`. Its final head `8f56b0c8642b96e447708428b107f2f96005d592` received the [trusted OCI reviewer Bot PASS](https://github.com/Khamel83/kid-friendly-ai/pull/26#pullrequestreview-5398202479) and passed [Node 18/20 CI](https://github.com/Khamel83/kid-friendly-ai/actions/runs/37083390156). Generated-file guard source review and merge are no longer pending; exact-source preparation, installation and runtime acceptance remain separate, unresolved gates.
+
+[PR #39](https://github.com/Khamel83/kid-friendly-ai/pull/39) merged as `a360de8a8dbd5543011aafa9203a4848d0228f6b`. Its final head `88dc3460c058a89cb9b2af7a70bbb6f2536d07c1` received the [trusted OCI reviewer Bot PASS](https://github.com/Khamel83/kid-friendly-ai/pull/39#pullrequestreview-5553164046) and passed [Node 18/20 CI](https://github.com/Khamel83/kid-friendly-ai/actions/runs/38959502201). Vercel adapter publication, source review and merge are no longer pending. Both PR deployment jobs were skipped; these checks do not establish a production release or deployed health.
+
+This corrects only the two source statuses. Earlier dated checkpoints below remain historical evidence; their pending PR #26/#39 source steps are superseded by this correction, not current instructions. All unchecked acceptance tasks remain open. Preserve the protected staged/unstaged owner patch and independently establish installed-artifact parity, private health, scoped credentials, explicit no-spend or bounded-spend approval, a private representative answer, inactive recovery installation, cold-swap evidence, fencing, client path, rollback and return. No runtime, credential, provider, route or deployment action was performed by this correction.
+
 ## Current repository-plan checkpoint — October 11, 2026
 
 The owner requested one owning plan for every open TODO, issue and PR. [docs/REPO_PLAN.md](docs/REPO_PLAN.md) maps 5 unchecked source references and 2 open native records observed from `9c473aa42697b8ff5f92a9bc900e953d605262c0`. G2K is the executor; coordinator34 tracks project-owned acceptance. Previous source prose below is retained as dated evidence, not refreshed runtime attestation.
