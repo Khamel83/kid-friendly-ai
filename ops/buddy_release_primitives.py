@@ -264,6 +264,11 @@ class Runtime:
             "env",
             "-i",
             *env_assignments(env),
+            # sudo/PAM can reset the umask; constrain the actual build child.
+            BIN["bash"],
+            "-c",
+            'umask 077; exec "$@"',
+            "buddy-private-command",
             *cmd,
         ]
         return self.run(full_cmd, cwd=cwd, timeout=timeout)
