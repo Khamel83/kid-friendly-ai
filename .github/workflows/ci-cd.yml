@@ -40,6 +40,9 @@ jobs:
     - name: Run tests
       run: npm test || echo "Tests skipped - continuing"
 
+    - name: Test deployment receipt producer
+      run: python3 -m unittest discover -s ops -p test_buddy_vercel_receipt.py
+
     - name: Build application
       run: npm run build
 
@@ -136,3 +139,22 @@ jobs:
         echo "   1. Go to https://vercel.com/khamel83/kid-friendly-ai"
         echo "   2. Trigger deployment from dashboard"
         echo "   3. Check deployment logs for errors"
+
+    # One bounded metadata artifact per existing deploy job; no extra Vercel request.
+    - name: Record deployment metadata
+      if: always()
+      env:
+        DEPLOYMENT_STEP_CONCLUSION: ${{ steps.deploy-vercel.conclusion }}
+        DEPLOYMENT_CONFIGURED: ${{ steps.deploy-vercel.outputs.configured }}
+      run: |
+        umask 077
+        python3 ops/buddy_vercel_receipt.py > "${RUNNER_TEMP}/buddy-vercel-deployment-receipt.json"
+
+    - name: Upload deployment metadata
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: buddy-vercel-deployment-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ runner.temp }}/buddy-vercel-deployment-receipt.json
+        if-no-files-found: error
+        retention-days: 7
