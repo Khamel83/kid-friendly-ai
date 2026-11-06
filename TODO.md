@@ -1,5 +1,7 @@
 ## PR44 workflow context qualification — November 6, 2026 UTC
 
+PR42 is now source-accepted: normal merge4f2968fa after exact7c3f3d50 trustedPASS5723168552/Node18+20 checks, canonical merge-c96ce6a1f4f44acb8a09e46729c74e48 independently verified. Subsequent main42187898266 SUCCESS, but actual Deploy to Vercel and success notification were SKIPPED; fallback ran. No live Vercel release or OCI acceptance follows. This candidate integrates that accepted main and preserves its source-status correction below.
+
 [Engage96](https://github.com/Khamel83/engage/issues/96) integrates original0a040dab with fetched mainc91ca417. The prior review was blocked by unavailable full workflow context, rather than an established contract bug. Engage independently read the complete native workflow and verified existing deploy-vercel ID/configured output in the same job; [exact source context](docs/evidence/2026-11-06-deployment-receipt-context.md) preserves the baseline/hash/unchanged step. Seven provider-free receipt tests pass; no implementation correction or weakened tests.
 
 Candidate source only; new exact-head nativeCI/trusted review and normal merge remain pending. This metadata-only artifact does not establish independent remote release identity, health, OCI installed parity, representative answer, recovery, fencing, client path or return. Existing provider/credential/runtime holds remain. No live Vercel deployment/endpoint call, paid API or production route operation. Reused clean `.worktrees/pub-row77-buddy-deployment-producer-20261103` on fix/dot-tested-pr-repairs-20261106; prior branch0a040dab, protected primary6278a9c/OCI edits and all rollback anchors retained; no cleanup.
@@ -20,8 +22,10 @@ short reads while retaining the1024-byte refusal. The exact canonical
 Next14.0.4 declaration is still checked both after build and after the root
 copy, before manifest/publication. Expected presence is preserved; races,
 unsafe leaves and unsupported safe-open flags refuse without publishing a
-release. Next: final independent/exact-head trusted review and Node CI, then
-repeat guarded prepare/install. Existing servicePID1204 and dirty checkout
+release. Source review and merge are complete: [PR #26](https://github.com/Khamel83/kid-friendly-ai/pull/26)
+merged as `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0` after exact-head
+trusted PASS and Node 18/20 CI for `8f56b0c8642b96e447708428b107f2f96005d592`.
+Next: repeat guarded prepare/install only after the existing parity and owner gates. Existing servicePID1204 and dirty checkout
 remain.
 # Current work
 
@@ -33,15 +37,18 @@ remain.
   suite. Earlier49 tests preceded three copied-file/open-flag regression
   methods; two latest regressions cover dependency-location mismatch refusal
   and multi-chunk short reads.
-- [ ] Review/merge the generated-file guard repair, then repeat exact-source
-  prepare/install. The first prepare passed the keyless probe but refused
+- [ ] Repeat exact-source prepare/install after the existing parity and owner
+  gates. Generated-file guard [PR #26](https://github.com/Khamel83/kid-friendly-ai/pull/26)
+  is merged as `4dcb3a4b6dfa8f5e2735c78c6ebedde2dabd6da0`; source completion
+  does not establish installation or runtime acceptance. The first prepare passed the keyless probe but refused
   publication; servicePID1204/dirty checkout are unchanged.
 
 - [x] Prepare guarded Buddy-only release source: root copied-tree verification,
   manifest binding, exact failed-stage cleanup, native unit modes and
   systemd255 environment-file flags.40 tests/independent review pass.
 - [x] Obtain exact PR25 trusted PASS/Node18/20 CI and merge08ceda61.
-  The generated-file repair has its own final-head review/CI gate above.
+  The generated-file repair passed its own final-head review/CI in PR #26;
+  its preparation, installation and runtime gates remain open above.
 
 - [x] Reconcile the protected OCI app edits in reviewed source without resetting the active checkout: [PR #19](https://github.com/Khamel83/kid-friendly-ai/pull/19) merged as `cab8cfb` after exact-head review and Node 18/20 CI. The keyless exact-source Homelab drill passed home 200, memory=true, and invalid ask 400; health 503 reflects deliberately absent provider credentials. See [HANDOFF.md](HANDOFF.md).
 - [ ] Compare the exact reviewed release to the OCI running artifact and preserve the staged/unstaged patch before any active deployment. A Git HEAD alone is not parity evidence.
@@ -59,7 +66,7 @@ Use [the ordered reconciliation](docs/REPO_PLAN.md) and [coordinator #34](https:
 ## Vercel release adapter repair — October 16, 2026
 
 - [x] Prepare the exact `main` source at `1402c0b14945636aa1f8b5d09bdc715e46c3c963`: replace unresolved `vercel/action@v1` with pinned Vercel CLI `64.4.0` (`pull` production, `build --prod`, `deploy --prebuilt --prod`), and make the release checkout explicit at `${{ github.sha }}`. Retain the production environment, main-only release gate, existing `secrets.VERCEL_TOKEN` and `vars.VERCEL_*` names, and the existing unconfigured fallback. No credential or runtime change was made.
-- [ ] Publish the normal PR, obtain native CI and trusted review, merge through the normal `main` path, then verify the exact release run and `/api/health`. A live Vercel release remains unperformed and requires the existing Vercel values to be configured.
+- [ ] Verify the exact release run and deployed `/api/health` after the existing Vercel configuration and owner gates. [PR #39](https://github.com/Khamel83/kid-friendly-ai/pull/39) merged as `a360de8a8dbd5543011aafa9203a4848d0228f6b` after exact-head trusted PASS and Node 18/20 CI for `88dc3460c058a89cb9b2af7a70bbb6f2536d07c1`. Its PR deployment job was skipped; source completion does not establish a live production release.
 ## Fleet CI cancellation - source checkpoint (October 16, 2026)
 
 - [x] `.github/workflows/ci-cd.yml` has a prepared PR-only concurrency cancellation change on `feat/fleet-ci-cancellation-20261016`; native CI, review, and normal merge remain pending. No runtime change is claimed. Done (model-matched): https://github.com/Khamel83/kid-friendly-ai/pull/38
