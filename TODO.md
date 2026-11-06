@@ -1,3 +1,13 @@
+## PR44 workflow context qualification — November 6, 2026 UTC
+
+PR42 is now source-accepted: normal merge4f2968fa after exact7c3f3d50 trustedPASS5723168552/Node18+20 checks, canonical merge-c96ce6a1f4f44acb8a09e46729c74e48 independently verified. Subsequent main42187898266 SUCCESS, but actual Deploy to Vercel and success notification were SKIPPED; fallback ran. No live Vercel release or OCI acceptance follows. This candidate integrates that accepted main and preserves its source-status correction below.
+
+[Engage96](https://github.com/Khamel83/engage/issues/96) integrates original0a040dab with fetched mainc91ca417. The prior review was blocked by unavailable full workflow context, rather than an established contract bug. Engage independently read the complete native workflow and verified existing deploy-vercel ID/configured output in the same job; [exact source context](docs/evidence/2026-11-06-deployment-receipt-context.md) preserves the baseline/hash/unchanged step. Seven provider-free receipt tests pass; no implementation correction or weakened tests.
+
+Candidate source only; new exact-head nativeCI/trusted review and normal merge remain pending. This metadata-only artifact does not establish independent remote release identity, health, OCI installed parity, representative answer, recovery, fencing, client path or return. Existing provider/credential/runtime holds remain. No live Vercel deployment/endpoint call, paid API or production route operation. Reused clean `.worktrees/pub-row77-buddy-deployment-producer-20261103` on fix/dot-tested-pr-repairs-20261106; prior branch0a040dab, protected primary6278a9c/OCI edits and all rollback anchors retained; no cleanup.
+
+Next: native PR44 source gates, then independently inspect the ordinary metadata artifact after the existing authorized main workflow runs; source merge is not runtime acceptance.
+
 <!-- janitor:begin:todo -->
 - [x] 2026-10-05: Repair PR #29's managed merge rule to require the latest
   trusted, non-dismissed OCI reviewer Bot PASS for the exact current commit;
