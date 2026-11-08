@@ -28,6 +28,15 @@ remain.
 - [ ] Review/merge the generated-file guard repair, then repeat exact-source
   prepare/install. The first prepare passed the keyless probe but refused
   publication; servicePID1204/dirty checkout are unchanged.
+- [ ] Produce the missing prepare result for Buddy release 26/42 on the
+  authorized Homelab recovery/build workspace (issue #45). Created isolated
+  source/release candidate at SHA `185928bc75f01f1d76986646648070c379376df6`
+  with all validations passing: locked Next14.0.4 declaration, clean source
+  environment, successful npm ci/build, generated next-env.d.ts exactly matches
+  canonical, and copy digests verified. Local bounded prepare completed;
+  Homelab build invocation ready per [docs/PREPARE_RESULT_20261104.md](docs/PREPARE_RESULT_20261104.md).
+  Next: execute exact bounded invocation on Homelab clean-source/build
+  workspace through khamel83@homelab.deer-panga.ts.net operator.
 
 - [x] Prepare guarded Buddy-only release source: root copied-tree verification,
   manifest binding, exact failed-stage cleanup, native unit modes and

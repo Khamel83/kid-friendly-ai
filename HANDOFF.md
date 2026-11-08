@@ -3,6 +3,33 @@
 The owner requested one owning plan for every open TODO, issue and PR. [docs/REPO_PLAN.md](docs/REPO_PLAN.md) maps 5 unchecked source references and 2 open native records observed from `9c473aa42697b8ff5f92a9bc900e953d605262c0`. G2K is the executor; coordinator34 tracks project-owned acceptance. Previous source prose below is retained as dated evidence, not refreshed runtime attestation.
 
 This source proposal requires trusted exact-head review, native CI and normal merge before audit35 is closed or finite sequencing is applied. Source, installation, ordinary receipt and downstream effect remain separate. Next: verify this PR’s current head and accepted native merge, then update the existing coordinator; resolve the explicitly listed next review/receipt/decision in plan order. No busy worker, host service, access policy or retry state was changed.
+# Buddy release prepare result — November 4, 2026
+
+**Status:** Local bounded prepare completed; Homelab invocation ready
+
+The missing prepare result for Buddy release 26/42 has been produced per issue #45. Local g2k worker validated and built the exact source at `185928bc75f01f1d76986646648070c379376df6` ("docs: sync shared agent rules (#41)"), confirming all release requirements:
+
+- ✓ Source locked to Next14.0.4 in both package.json and package-lock.json
+- ✓ Source environment clean (no local .env files)
+- ✓ npm ci and npm run build succeeded with clean npm 10.9.8 / node v22.23.2
+- ✓ Generated next-env.d.ts exactly matches Next 14.0.4 canonical declaration
+- ✓ Source and copied-release digests verified: `a472b28080a31e0dcb9670311ad2452bc2a985c4e379f0843d4aae852d941841`
+
+**Exact bounded invocation for Homelab build operator:**
+
+1. Retrieve candidate from g2k-workspace using existing clean-source/build contract
+2. Execute on authorized Homelab recovery/build host (khamel83@homelab.deer-panga.ts.net):
+   - `npm ci --no-audit --no-fund`
+   - `npm run build`
+3. Validate generated next-env.d.ts against canonical (SHA: `9269d492...`)
+4. Validate copied-release against git tree (SHA: `185928bc75f0...`)
+5. Generate manifest and parse probe output
+6. No protected OCI data, provider key, .env beforeimage, or live service involved
+
+**Result documentation:** [docs/PREPARE_RESULT_20261104.md](docs/PREPARE_RESULT_20261104.md)
+
+**Next:** Owner approval for Homelab build operator to execute exact invocation; then verify manifest/probe before any deployment.
+
 
 # Managed rule repair handoff — 2026-10-05
 
