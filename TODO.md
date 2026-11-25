@@ -61,7 +61,7 @@ The clean source rebuild and no-provider loopback probe are recorded in [HANDOFF
 
 ## Kids hub link to Buddy — November 25, 2026
 
-- [ ] Make `/api/health`'s api check and the release operator require `OPENROUTER_API_KEY`, the only key `/api/ask` uses. Before this change an OpenAI key alone made health report that Buddy could answer while every question returned 500.
+- [x] Make `/api/health`'s api check and the release operator require `OPENROUTER_API_KEY`, the only key `/api/ask` uses. Before this change an OpenAI key alone made health report that Buddy could answer while every question returned 500. Source: [PR #55](https://github.com/Khamel83/kid-friendly-ai/pull/55); OCI deploy still open.
 - [ ] Give `buddy.khamel.com` a working public route after an owner decision on exposure and provider spend. Its DNS points at a retired OCI address and the OCI tunnel has no Buddy ingress, so Dada's kids hub "Talk to Buddy" link fails even after the health fix is deployed. See [INFRA.md](INFRA.md).
 
 ## Owning repository plan
