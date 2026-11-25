@@ -2,7 +2,7 @@
 
 Asked to fix Buddy's 503 for the Dada kids hub launch ([dada #48](https://github.com/Khamel83/dada/issues/48)). Findings from source and records only; this session had no OCI, Homelab or public-route access.
 
-- The live OCI 503 is the old memory check (`memory=false`). The fix merged in PR #17 and is not deployed: the exact-source prepare/install and parity gates in [TODO.md](TODO.md) are still open. No source change can clear it; it needs the guarded OCI release run in [docs/RECOVERY.md](docs/RECOVERY.md#bounded-oci-release-helper).
+- Likely cause of the OCI 503, from records and not rechecked live here: [docs/RECOVERY.md](docs/RECOVERY.md) records OCI's private health at 503 with `memory=false` (September 29, 2026). PR #17 fixed that check in source, and [TODO.md](TODO.md) still lists its deploy and the exact-source prepare/install and parity gates as open. If that still holds, no source change can clear it; it needs the guarded OCI release run in [docs/RECOVERY.md](docs/RECOVERY.md#bounded-oci-release-helper). Read OCI's private health first to confirm the cause.
 - Source mismatch fixed in this branch: health's api check accepted `OPENAI_API_KEY` alone, but `/api/ask` uses only `OPENROUTER_API_KEY`. Health and `/api/ask` now read the key through one helper (`src/utils/askApiKey.ts`), and the operator's runtime-env check requires the OpenRouter key. Keyless probe results are unchanged (`api=false`, health 503). If OCI's `.env.local` lacks `OPENROUTER_API_KEY`, install now refuses before mutation instead of rolling back.
 - Separate from the 503: `buddy.khamel.com` has no working public route (see [INFRA.md](INFRA.md)).
 
