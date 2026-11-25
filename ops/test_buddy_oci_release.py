@@ -78,6 +78,18 @@ class FilesystemTrustTests(unittest.TestCase):
                 with runtime.lock():
                     pass
 
+class RuntimeEnvProjectionTests(unittest.TestCase):
+    def test_runtime_env_requires_openrouter_key_for_ask(self):
+        projected = buddy.projected_runtime_env(
+            {"OPENROUTER_API_KEY": "sk-or-test", "OPENAI_API_KEY": "sk-test", "VERCEL_OIDC_TOKEN": "token"}
+        )
+        self.assertEqual(projected, {"OPENROUTER_API_KEY": "sk-or-test", "OPENAI_API_KEY": "sk-test"})
+        for values in ({"OPENAI_API_KEY": "sk-test"}, {"ELEVENLABS_API_KEY": "el-test"}, {}):
+            with self.subTest(keys=sorted(values)):
+                with self.assertRaisesRegex(buddy.ReleaseError, "OPENROUTER_API_KEY"):
+                    buddy.projected_runtime_env(values)
+
+
 class SystemdIdentityTests(unittest.TestCase):
     def test_environment_files_parser_preserves_required_and_optional_annotations(self):
         raw = "\n".join(

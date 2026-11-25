@@ -17,6 +17,7 @@ Prepare refused before app publication; active `buddy.service` is unchanged.
 - The app has no server-side database or durable file state in the inspected API routes. Browser preferences use client local storage. Verify this again if routes change.
 - Production provider configuration is local to its host. Do not print or copy credential values into this repository or a recovery receipt.
 - The public route, active OCI writer, and failback remain unchanged until the Homelab recovery contract's service gates pass.
+- Public route (Infra records, November 13, 2026): `buddy.khamel.com` DNS points at the retired OCI address 141.148.146.79, which does not answer, and OCI's Cloudflare tunnel `oneshot-pg` has no Buddy ingress. The owner kept the name. A working public route needs an owner decision on exposure and provider spend. See [Infra's tailnet and route audit](https://github.com/Khamel83/infra/blob/main/docs/operations/2026-11-12-tailnet-service-names.md).
 <!-- janitor:begin:catalog -->
 ## Repository identity
 Infrastructure authority: `Khamel83/infra:config/project-catalog.yml`.

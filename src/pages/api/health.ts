@@ -100,11 +100,10 @@ function checkRedis(): boolean {
 }
 
 function checkApi(): boolean {
-  // Check if API keys are configured
-  const hasOpenRouterKey = process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== '';
-  const hasOpenAIKey = process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== '';
-
-  return Boolean(hasOpenRouterKey || hasOpenAIKey);
+  // /api/ask answers questions only through OpenRouter. An OpenAI key alone
+  // serves the voice routes, so it must not make health report that Buddy can answer.
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  return Boolean(openRouterKey && openRouterKey !== '');
 }
 
 function checkMemory(): boolean {
