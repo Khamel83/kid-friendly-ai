@@ -38,8 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // --- Use OpenRouter API Key ---
-    const apiKey = getAskApiKey();
-    if (!apiKey) {
+    const openRouterAuth = getAskApiKey();
+    if (!openRouterAuth) {
       console.error('OpenRouter API key is not configured');
       return res.status(500).json({ error: 'API key is not configured' });
     }
@@ -87,7 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`,
+              'Authorization': `Bearer ${openRouterAuth}`,
               'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://buddy.khamel.com',
               'X-Title': 'Kid-Friendly AI Assistant'
             },
