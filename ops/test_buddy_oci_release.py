@@ -78,6 +78,18 @@ class FilesystemTrustTests(unittest.TestCase):
                 with runtime.lock():
                     pass
 
+class RuntimeEnvProjectionTests(unittest.TestCase):
+    def test_runtime_env_requires_openrouter_key_for_ask(self):
+        projected = buddy.projected_runtime_env(
+            {"OPENROUTER_API_KEY": "sk-or-test", "OPENAI_API_KEY": "sk-test", "VERCEL_OIDC_TOKEN": "token"}
+        )
+        self.assertEqual(projected, {"OPENROUTER_API_KEY": "sk-or-test", "OPENAI_API_KEY": "sk-test"})
+        for values in ({"OPENAI_API_KEY": "sk-test"}, {"ELEVENLABS_API_KEY": "el-test"}, {}):
+            with self.subTest(keys=sorted(values)):
+                with self.assertRaisesRegex(buddy.ReleaseError, "OPENROUTER_API_KEY"):
+                    buddy.projected_runtime_env(values)
+
+
 class SystemdIdentityTests(unittest.TestCase):
     def test_environment_files_parser_preserves_required_and_optional_annotations(self):
         raw = "\n".join(
@@ -261,6 +273,23 @@ class InstallRollbackTests(unittest.TestCase):
                 install_current(config, runtime)
             self.assertEqual(config.runtime_env.read_text(), original_runtime)
             self.assertEqual(config.dropin.read_text(), original_dropin)
+            self.assertEqual(list(config.receipt_root.glob("*.json")), [])
+            self.assertEqual(list(config.transaction_root.iterdir()), [])
+            self.assertEqual(runtime.calls, [])
+
+    def test_openai_only_source_env_rejects_install_before_intent_stop_or_write(self):
+        with temp_path() as tmp:
+            config, runtime = write_install_fixture(tmp)
+            write_file(config.source_env, "OPENAI_API_KEY=sk-test-secret\n", 0o600)
+            original_runtime = config.runtime_env.read_bytes()
+            original_dropin = config.dropin.read_bytes()
+            for dry_run in (True, False):
+                with self.subTest(dry_run=dry_run):
+                    with mock.patch.object(buddy, "probe_degraded_baseline", return_value=BASELINE_503_MEMORY_FALSE):
+                        with self.assertRaisesRegex(buddy.ReleaseError, "OPENROUTER_API_KEY"):
+                            install_current(config, runtime, dry_run=dry_run)
+            self.assertEqual(config.runtime_env.read_bytes(), original_runtime)
+            self.assertEqual(config.dropin.read_bytes(), original_dropin)
             self.assertEqual(list(config.receipt_root.glob("*.json")), [])
             self.assertEqual(list(config.transaction_root.iterdir()), [])
             self.assertEqual(runtime.calls, [])

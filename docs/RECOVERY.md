@@ -51,6 +51,8 @@ unit bytes/mode are never rewritten. Source .env.local must be uid1001:0600,
 single-link, with only reviewed project keys plus VERCEL_OIDC_TOKEN. Duplicate,
 unknown, multiline or shell values refuse. Only the three project API keys
 are projected into root0600 /etc/buddy/runtime.env; Vercel token is omitted.
+Install refuses a source env without OPENROUTER_API_KEY, because /api/ask
+and the health api check use only that key. OPENAI_API_KEY serves voice routes.
 The root0644 drop-in sets only release WorkingDirectory and EnvironmentFile.
 Multiline systemd255 environment entries retain required/optional flags;
 installed identity requires exactly the mandatory runtime file.

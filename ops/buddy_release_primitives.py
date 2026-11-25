@@ -563,8 +563,10 @@ def parse_env_file(path: Path, *, allowed_keys: set[str] = SOURCE_ENV_KEYS) -> d
 
 def projected_runtime_env(values: Mapping[str, str]) -> dict[str, str]:
     projected = {key: values[key] for key in RUNTIME_ENV_KEYS if key in values}
-    if not (projected.get("OPENROUTER_API_KEY") or projected.get("OPENAI_API_KEY")):
-        raise ReleaseError("runtime env must include OPENROUTER_API_KEY or OPENAI_API_KEY")
+    # /api/ask and the api health check need OpenRouter; refuse before mutation
+    # instead of installing a release whose health check must then fail.
+    if not projected.get("OPENROUTER_API_KEY"):
+        raise ReleaseError("runtime env must include OPENROUTER_API_KEY")
     for key, value in projected.items():
         if not SAFE_VALUE_RE.fullmatch(value):
             raise ReleaseError(f"{key} contains unsupported characters")
