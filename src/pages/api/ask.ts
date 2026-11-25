@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { systemPrompt, cloudModeRestrictions } from '../../utils/aiPrompt';
+import { getAskApiKey } from '../../utils/askApiKey';
 
 // Define a type for the messages in the conversation history
 interface HistoryMessage {
@@ -37,7 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // --- Use OpenRouter API Key ---
-    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiKey = getAskApiKey();
     if (!apiKey) {
       console.error('OpenRouter API key is not configured');
       return res.status(500).json({ error: 'API key is not configured' });

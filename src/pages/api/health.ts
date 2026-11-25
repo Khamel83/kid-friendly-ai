@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getHeapStatistics } from 'v8';
+import { getAskApiKey } from '../../utils/askApiKey';
 
 interface HealthResponse {
   status: 'healthy' | 'unhealthy';
@@ -100,10 +101,8 @@ function checkRedis(): boolean {
 }
 
 function checkApi(): boolean {
-  // /api/ask answers questions only through OpenRouter. An OpenAI key alone
-  // serves the voice routes, so it must not make health report that Buddy can answer.
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  return Boolean(openRouterKey && openRouterKey !== '');
+  // Same key lookup as /api/ask, so health reports api=true only when Buddy can answer.
+  return Boolean(getAskApiKey());
 }
 
 function checkMemory(): boolean {

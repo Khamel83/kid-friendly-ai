@@ -3,10 +3,10 @@
 Asked to fix Buddy's 503 for the Dada kids hub launch ([dada #48](https://github.com/Khamel83/dada/issues/48)). Findings from source and records only; this session had no OCI, Homelab or public-route access.
 
 - The live OCI 503 is the old memory check (`memory=false`). The fix merged in PR #17 and is not deployed: the exact-source prepare/install and parity gates in [TODO.md](TODO.md) are still open. No source change can clear it; it needs the guarded OCI release run in [docs/RECOVERY.md](docs/RECOVERY.md#bounded-oci-release-helper).
-- Source mismatch fixed in this branch: health's api check accepted `OPENAI_API_KEY` alone, but `/api/ask` uses only `OPENROUTER_API_KEY`. Health and the operator's runtime-env check now require the OpenRouter key. Keyless probe results are unchanged (`api=false`, health 503). If OCI's `.env.local` lacks `OPENROUTER_API_KEY`, install now refuses before mutation instead of rolling back.
+- Source mismatch fixed in this branch: health's api check accepted `OPENAI_API_KEY` alone, but `/api/ask` uses only `OPENROUTER_API_KEY`. Health and `/api/ask` now read the key through one helper (`src/utils/askApiKey.ts`), and the operator's runtime-env check requires the OpenRouter key. Keyless probe results are unchanged (`api=false`, health 503). If OCI's `.env.local` lacks `OPENROUTER_API_KEY`, install now refuses before mutation instead of rolling back.
 - Separate from the 503: `buddy.khamel.com` has no working public route (see [INFRA.md](INFRA.md)).
 
-Verification: `python3 -m unittest discover -s ops -p 'test_buddy*.py' -q` passes 64 tests (one new regression); `npm ci` was not run here, so Node lint/type-check/build rely on native CI. Next: native CI and trusted review of this branch, then the owner-gated OCI release run.
+Verification: `python3 -m unittest discover -s ops -p 'test_buddy*.py' -q` passes 65 tests (two new regressions, one through the install path); `npm ci` was not run here, so Node lint/type-check/build rely on native CI. Next: native CI and trusted review of this branch, then the owner-gated OCI release run.
 
 ## PR44 workflow context qualification — November 6, 2026 UTC
 
