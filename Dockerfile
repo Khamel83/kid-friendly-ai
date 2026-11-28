@@ -1,6 +1,6 @@
 # Multi-stage build for production Next.js application
 # Stage 1: Build stage
-FROM node:18-alpine AS builder
+FROM node:26-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache \
@@ -30,7 +30,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production stage
-FROM node:18-alpine AS runner
+FROM node:26-alpine AS runner
 
 # Install runtime dependencies
 RUN apk add --no-cache \
